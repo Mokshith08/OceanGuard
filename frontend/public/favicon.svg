@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Navy background with rounded corners -->
+  <rect width="32" height="32" rx="7" fill="#0a1628"/>
+  <!-- Teal wave icon (matches the Waves lucide icon used in the app) -->
+  <path d="M6 13c1.5 0 2.5-1.5 4-1.5S12.5 13 14 13s2.5-1.5 4-1.5S20.5 13 22 13s2.5-1.5 4-1.5" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M6 19c1.5 0 2.5-1.5 4-1.5S12.5 19 14 19s2.5-1.5 4-1.5S20.5 19 22 19s2.5-1.5 4-1.5" stroke="#2dd4bf" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
