@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, Brain, Calculator, History, BarChart3,
   CreditCard, Settings, ChevronLeft, ChevronRight, LogOut,
-  Bell, User, Download, FileText, X,
+  Bell, User, Download, FileText, X, Menu,
 } from "lucide-react";
 import { OceanGuardLogo } from "@/components/OceanGuardLogo";
 import { ThemeToggle } from "@/hooks/useTheme";
@@ -119,6 +119,7 @@ function downloadFleetStatement() {
 export default function DashboardLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const hasStatement = !!localStorage.getItem("og_fleet_results");
@@ -134,18 +135,41 @@ export default function DashboardLayout() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
+
   return (
     <div className="flex min-h-screen bg-background">
-      {/* Sidebar */}
+      {/* Mobile Overlay */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setMobileOpen(false)}
+            className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm lg:hidden"
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Sidebar - Desktop & Mobile */}
       <motion.aside
         animate={{ width: collapsed ? 72 : 260 }}
         transition={{ duration: 0.3 }}
-        className="fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-border/50 bg-card"
+        className={`fixed left-0 top-0 z-50 flex h-screen flex-col border-r border-border/50 bg-card transition-transform duration-300 lg:translate-x-0 ${
+          mobileOpen ? "translate-x-0 w-[260px]" : "-translate-x-full lg:w-auto"
+        }`}
       >
         <div className="flex h-16 items-center justify-between px-4">
           <OceanGuardLogo collapsed={collapsed} />
-          <button onClick={() => setCollapsed(!collapsed)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground">
+          <button onClick={() => setCollapsed(!collapsed)} className="hidden lg:block rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground">
             {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </button>
+          <button onClick={() => setMobileOpen(false)} className="lg:hidden rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground">
+            <X className="h-4 w-4" />
           </button>
         </div>
 
@@ -182,12 +206,17 @@ export default function DashboardLayout() {
       </motion.aside>
 
       {/* Main */}
-      <div className={`flex-1 transition-all duration-300 ${collapsed ? "ml-[72px]" : "ml-[260px]"}`}>
+      <div className={`flex-1 transition-all duration-300 lg:ml-0 ${collapsed ? "lg:ml-[72px]" : "lg:ml-[260px]"}`}>
         {/* Top bar */}
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border/50 bg-background/80 px-6 backdrop-blur-xl">
-          <h2 className="font-display text-lg font-semibold text-foreground">
-            {menuItems.find((m) => m.href === location.pathname)?.label || "Dashboard"}
-          </h2>
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border/50 bg-background/80 px-4 sm:px-6 backdrop-blur-xl">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setMobileOpen(true)} className="rounded-lg p-2 text-muted-foreground hover:bg-muted lg:hidden">
+              <Menu className="h-5 w-5" />
+            </button>
+            <h2 className="font-display text-lg font-semibold text-foreground">
+              {menuItems.find((m) => m.href === location.pathname)?.label || "Dashboard"}
+            </h2>
+          </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <button className="rounded-xl p-2.5 text-muted-foreground hover:bg-muted hover:text-foreground">

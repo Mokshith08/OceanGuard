@@ -22,7 +22,7 @@ export function LandingNavbar() {
         <OceanGuardLogo />
 
         {/* Desktop */}
-        <div className="hidden items-center gap-1 md:flex">
+        <div className="hidden items-center gap-1 lg:flex">
           {navLinks.map((link) => (
             <Link
               key={link.href}
@@ -38,7 +38,7 @@ export function LandingNavbar() {
           ))}
         </div>
 
-        <div className="hidden items-center gap-3 md:flex">
+        <div className="hidden items-center gap-3 lg:flex">
           <ThemeToggle />
           <Link to="/login" className="rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
             Log in
@@ -49,7 +49,7 @@ export function LandingNavbar() {
         </div>
 
         {/* Mobile toggle */}
-        <div className="flex items-center gap-2 md:hidden">
+        <div className="flex items-center gap-2 lg:hidden">
           <ThemeToggle />
           <button onClick={() => setOpen(!open)} className="rounded-lg p-2 hover:bg-muted">
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -64,7 +64,7 @@ export function LandingNavbar() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="border-t border-border/50 bg-background md:hidden"
+            className="border-t border-border/50 bg-background lg:hidden"
           >
             <div className="space-y-1 px-4 py-4">
               {navLinks.map((link) => (
