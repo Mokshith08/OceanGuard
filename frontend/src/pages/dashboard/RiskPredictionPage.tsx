@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, AlertTriangle, CheckCircle, Info, Wind, Waves, Thermometer, CloudRain, ShieldCheck } from "lucide-react";
+import { Loader2, AlertTriangle, CheckCircle, Info, Wind, Waves, Thermometer, CloudRain, ShieldCheck, Search, MapPin } from "lucide-react";
 
 // Predefined risk logic
 const riskColors: Record<string, { bg: string; text: string; icon: typeof AlertTriangle; suggestion: string }> = {
@@ -11,6 +11,8 @@ const riskColors: Record<string, { bg: string; text: string; icon: typeof AlertT
 
 export default function RiskPredictionPage() {
   const [analyzing, setAnalyzing] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [location, setLocation] = useState("Current Local Coordinates");
   const [telemetry, setTelemetry] = useState<{
     windSpeed: number;
     waveHeight: number;
@@ -27,16 +29,19 @@ export default function RiskPredictionPage() {
   const [scanSteps, setScanSteps] = useState(0);
 
   useEffect(() => {
+    if (!analyzing) return;
+
+    let finalTelemetry = { windSpeed: 0, waveHeight: 0, seaTemp: 0, rainfall: 0 };
+
     // Simulate real-time data streaming
     const interval = setInterval(() => {
-      if (analyzing) {
-        setTelemetry({
-          windSpeed: Math.floor(Math.random() * 40) + 10,
-          waveHeight: +(Math.random() * 4 + 0.5).toFixed(1),
-          seaTemp: +(Math.random() * 15 + 10).toFixed(1),
-          rainfall: +(Math.random() * 50).toFixed(1),
-        });
-      }
+      finalTelemetry = {
+        windSpeed: Math.floor(Math.random() * 40) + 10,
+        waveHeight: +(Math.random() * 4 + 0.5).toFixed(1),
+        seaTemp: +(Math.random() * 15 + 10).toFixed(1),
+        rainfall: +(Math.random() * 50).toFixed(1),
+      };
+      setTelemetry(finalTelemetry);
     }, 800);
 
     // Simulate step-by-step AI connection processing
@@ -46,18 +51,18 @@ export default function RiskPredictionPage() {
 
     // Simulate final ML resolution after 6 seconds
     const timeout = setTimeout(() => {
-      setAnalyzing(false);
       clearInterval(interval);
       clearInterval(stepInterval);
+      setAnalyzing(false);
       
       // Calculate a pseudo-realistic risk based on the final telemetry values
       let riskLevel = "Low";
       let baseProb = Math.floor(Math.random() * 20) + 10; // 10-30%
 
-      if (telemetry.windSpeed > 35 || telemetry.waveHeight > 3.0) {
+      if (finalTelemetry.windSpeed > 35 || finalTelemetry.waveHeight > 3.0) {
         riskLevel = "High";
         baseProb = Math.floor(Math.random() * 20) + 75; // 75-95%
-      } else if (telemetry.windSpeed > 20 || telemetry.waveHeight > 1.8 || telemetry.rainfall > 20) {
+      } else if (finalTelemetry.windSpeed > 20 || finalTelemetry.waveHeight > 1.8 || finalTelemetry.rainfall > 20) {
         riskLevel = "Medium";
         baseProb = Math.floor(Math.random() * 30) + 40; // 40-70%
       }
@@ -70,7 +75,19 @@ export default function RiskPredictionPage() {
       clearInterval(stepInterval);
       clearTimeout(timeout);
     };
-  }, []);
+  }, [analyzing]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    setLocation(searchQuery);
+    setSearchQuery("");
+    
+    // Trigger analysis for new location
+    setAnalyzing(true);
+    setScanSteps(0);
+    setResult(null);
+  };
 
   const rc = result ? riskColors[result.category] : null;
 
@@ -82,7 +99,7 @@ export default function RiskPredictionPage() {
   ];
 
   const analysisSteps = [
-    "Establishing connection to oceanic buoys...",
+    `Establishing connection to buoys near ${location}...`,
     "Synchronizing satellite weather telemetry...",
     "Running multi-variate ML threat analysis...",
     "Finalizing regional risk probability...",
@@ -90,6 +107,37 @@ export default function RiskPredictionPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
+      {/* Search Bar Section */}
+      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row gap-4 mb-4">
+        <form onSubmit={handleSearch} className="relative flex-1 group">
+          <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+            <Search className="h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+          </div>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search for a port, coastal city, or sea region..."
+            className="w-full h-14 pl-12 pr-32 rounded-xl border border-border bg-card text-foreground shadow-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-muted-foreground/70"
+          />
+          <button 
+            type="submit" 
+            disabled={analyzing || !searchQuery.trim()}
+            className="absolute right-2 top-2 bottom-2 px-6 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Predict
+          </button>
+        </form>
+        
+        <div className="flex items-center gap-3 px-6 h-14 rounded-xl border border-border bg-card shadow-sm whitespace-nowrap min-w-[240px]">
+          <MapPin className="h-5 w-5 text-primary" />
+          <div className="flex flex-col overflow-hidden">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground leading-none mb-1">Target Location</span>
+            <span className="text-sm font-semibold text-foreground leading-none truncate">{location}</span>
+          </div>
+        </div>
+      </motion.div>
+
       {/* Automated Telemetry Dashboard */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="stat-card">
         <div className="mb-6 flex items-center justify-between">
@@ -229,3 +277,4 @@ export default function RiskPredictionPage() {
     </div>
   );
 }
+
