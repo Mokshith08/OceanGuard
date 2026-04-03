@@ -1,19 +1,41 @@
 import { motion } from "framer-motion";
 import { History, AlertTriangle, CheckCircle, Info } from "lucide-react";
 
-const historyData = [
-  { date: "2026-02-16", location: "Bay of Bengal", risk: "High", probability: 82, windSpeed: 45, waveHeight: 4.2 },
-  { date: "2026-02-15", location: "Arabian Sea", risk: "Low", probability: 18, windSpeed: 12, waveHeight: 1.1 },
-  { date: "2026-02-14", location: "Pacific Coast", risk: "Medium", probability: 55, windSpeed: 28, waveHeight: 2.8 },
-  { date: "2026-02-13", location: "Bay of Bengal", risk: "Low", probability: 22, windSpeed: 15, waveHeight: 1.3 },
-  { date: "2026-02-12", location: "Indian Ocean", risk: "High", probability: 78, windSpeed: 42, waveHeight: 3.9 },
-  { date: "2026-02-11", location: "Arabian Sea", risk: "Medium", probability: 48, windSpeed: 25, waveHeight: 2.5 },
-];
-
-const riskIcon = { Low: CheckCircle, Medium: Info, High: AlertTriangle };
-const riskStyle = { Low: "text-accent bg-accent/10", Medium: "text-yellow-500 bg-yellow-500/10", High: "text-destructive bg-destructive/10" };
+import { useState, useEffect } from "react";
+import { fetchApi } from "@/lib/api";
+import { Loader2 } from "lucide-react";
 
 export default function RiskHistoryPage() {
+  const [historyData, setHistoryData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const res = await fetchApi("/risk/history");
+        const records = res.data?.records || [];
+        setHistoryData(records.map((r: any) => ({
+          date: new Date(r.createdAt).toLocaleDateString(),
+          location: r.city,
+          risk: r.risk === "Safe" ? "Low" : (r.risk === "High Risk" ? "High" : r.risk),
+          probability: r.risk === "Safe" ? 85 : 95,
+          windSpeed: r.mlInput?.[0] || 0,
+          waveHeight: +(r.mlInput?.[1] || 0).toFixed(1)
+        })));
+      } catch (error) {
+        console.error("Failed to load history", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchHistory();
+  }, []);
+
+  const riskIcon: Record<string, any> = { Low: CheckCircle, Medium: Info, High: AlertTriangle };
+  const riskStyle: Record<string, string> = { Low: "text-accent bg-accent/10", Medium: "text-yellow-500 bg-yellow-500/10", High: "text-destructive bg-destructive/10" };
+
+  if (loading) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+
   return (
     <div className="space-y-6">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="stat-card">
@@ -37,8 +59,8 @@ export default function RiskHistoryPage() {
             </thead>
             <tbody>
               {historyData.map((row, i) => {
-                const Icon = riskIcon[row.risk as keyof typeof riskIcon];
-                const style = riskStyle[row.risk as keyof typeof riskStyle];
+                const Icon = riskIcon[row.risk] || Info;
+                const style = riskStyle[row.risk] || riskStyle.Medium;
                 return (
                   <motion.tr key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.05 }} className="border-b border-border/50">
                     <td className="py-3.5 text-foreground">{row.date}</td>

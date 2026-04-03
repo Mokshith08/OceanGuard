@@ -4,34 +4,73 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 import { Calendar } from "lucide-react";
 
-const stats = [
-  { label: "Today's Risk Level", value: "Medium", change: "+5%", up: true, icon: Waves, color: "text-yellow-500", bg: "bg-yellow-500/10" },
-  { label: "Estimated Catch", value: "1,240 kg", change: "+12%", up: true, icon: Fish, color: "text-primary", bg: "bg-primary/10" },
-  { label: "Monthly Profit", value: "₹86,200", change: "+8%", up: true, icon: IndianRupee, color: "text-accent", bg: "bg-accent/10" },
-  { label: "Yearly Profit", value: "₹742,800", change: "+14%", up: true, icon: Calendar, color: "text-primary", bg: "bg-primary/10" },
-];
-
-const revenueData = [
-  { name: "Mon", revenue: 4200, profit: 2800 },
-  { name: "Tue", revenue: 5800, profit: 3900 },
-  { name: "Wed", revenue: 3100, profit: 1800 },
-  { name: "Thu", revenue: 6200, profit: 4100 },
-  { name: "Fri", revenue: 7500, profit: 5200 },
-  { name: "Sat", revenue: 5400, profit: 3600 },
-  { name: "Sun", revenue: 4800, profit: 3200 },
-];
-
-const riskData = [
-  { name: "Mon", risk: 35 },
-  { name: "Tue", risk: 45 },
-  { name: "Wed", risk: 72 },
-  { name: "Thu", risk: 28 },
-  { name: "Fri", risk: 15 },
-  { name: "Sat", risk: 40 },
-  { name: "Sun", risk: 55 },
-];
+import { useState, useEffect } from "react";
+import { fetchApi } from "@/lib/api";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
 export default function OverviewPage() {
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<any>(null);
+  const [profitHistory, setProfitHistory] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [analyticsRes, profitRes] = await Promise.all([
+          fetchApi("/dashboard/analytics"),
+          fetchApi("/dashboard/profit-history"),
+        ]);
+        setData(analyticsRes.data);
+        setProfitHistory(profitRes.data?.records || []);
+      } catch (err: any) {
+        toast.error("Failed to load dashboard data");
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Map backend stats
+  const p = data?.profit || {};
+  const stats = [
+    { label: "Total Safe Assessments", value: data?.riskDistribution?.safe?.toString() || "0", change: "", up: true, icon: Waves, color: "text-accent", bg: "bg-accent/10" },
+    { label: "Total Catch Recorded", value: `${p.totalCatch || 0} kg`, change: "", up: true, icon: Fish, color: "text-primary", bg: "bg-primary/10" },
+    { label: "Total Margin", value: `${p.avgProfitMargin || 0}%`, change: "", up: true, icon: IndianRupee, color: "text-accent", bg: "bg-accent/10" },
+    { label: "Total Profit", value: `₹${p.totalProfit || 0}`, change: "", up: true, icon: Calendar, color: "text-primary", bg: "bg-primary/10" },
+  ];
+
+  // Map revenue data
+  // Build from profitHistory
+  // Aggregate by day (last 7 items roughly, or just map the records if there are few)
+  const revenueData = profitHistory.slice(0, 7).reverse().map((r: any, i: number) => ({
+    name: new Date(r.createdAt).toLocaleDateString('en-US', { weekday: 'short' }),
+    revenue: r.result?.revenue || 0,
+    profit: r.result?.profit || 0,
+  }));
+  // Provide fallback if empty
+  if (revenueData.length === 0) {
+     revenueData.push({ name: "Mon", revenue: 0, profit: 0 });
+  }
+
+  // Map risk data
+  const riskData = (data?.recentActivity || []).map((r: any) => ({
+    name: new Date(r._id).toLocaleDateString('en-US', { weekday: 'short' }),
+    safe: r.safe,
+    highRisk: r.highRisk,
+  }));
+  if (riskData.length === 0) {
+     riskData.push({ name: "Mon", safe: 0, highRisk: 0 });
+  }
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
@@ -48,10 +87,12 @@ export default function OverviewPage() {
               <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${stat.bg}`}>
                 <stat.icon className={`h-5 w-5 ${stat.color}`} />
               </div>
-              <span className={`flex items-center gap-1 text-xs font-medium ${stat.up ? "text-accent" : "text-destructive"}`}>
-                {stat.up ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-                {stat.change}
-              </span>
+              {stat.change && (
+                <span className={`flex items-center gap-1 text-xs font-medium ${stat.up ? "text-accent" : "text-destructive"}`}>
+                  {stat.up ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+                  {stat.change}
+                </span>
+              )}
             </div>
             <p className="mt-4 text-2xl font-bold text-foreground">{stat.value}</p>
             <p className="mt-1 text-xs text-muted-foreground">{stat.label}</p>
@@ -83,7 +124,8 @@ export default function OverviewPage() {
               <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} />
               <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
               <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", color: "hsl(var(--foreground))" }} />
-              <Bar dataKey="risk" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="highRisk" fill="hsl(var(--destructive))" stackId="a" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="safe" fill="hsl(var(--primary))" stackId="a" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </motion.div>

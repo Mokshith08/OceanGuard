@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, AlertTriangle, CheckCircle, Info, Wind, Waves, Thermometer, CloudRain, ShieldCheck, Search, MapPin } from "lucide-react";
+import { fetchApi } from "@/lib/api";
+import { toast } from "sonner";
 
 // Predefined risk logic
 const riskColors: Record<string, { bg: string; text: string; icon: typeof AlertTriangle; suggestion: string }> = {
@@ -31,51 +33,75 @@ export default function RiskPredictionPage() {
   useEffect(() => {
     if (!analyzing) return;
 
-    let finalTelemetry = { windSpeed: 0, waveHeight: 0, seaTemp: 0, rainfall: 0 };
-
-    // Simulate real-time data streaming
-    const interval = setInterval(() => {
-      finalTelemetry = {
+    let isMounted = true;
+    let fallbackInterval: NodeJS.Timeout;
+    
+    // Simulate real-time data streaming (cool animation) while waiting for real data
+    fallbackInterval = setInterval(() => {
+      setTelemetry({
         windSpeed: Math.floor(Math.random() * 40) + 10,
         waveHeight: +(Math.random() * 4 + 0.5).toFixed(1),
         seaTemp: +(Math.random() * 15 + 10).toFixed(1),
         rainfall: +(Math.random() * 50).toFixed(1),
-      };
-      setTelemetry(finalTelemetry);
+      });
     }, 800);
 
-    // Simulate step-by-step AI connection processing
     const stepInterval = setInterval(() => {
       setScanSteps(prev => (prev < 3 ? prev + 1 : prev));
-    }, 1500);
+    }, 1200);
 
-    // Simulate final ML resolution after 6 seconds
-    const timeout = setTimeout(() => {
-      clearInterval(interval);
-      clearInterval(stepInterval);
-      setAnalyzing(false);
-      
-      // Calculate a pseudo-realistic risk based on the final telemetry values
-      let riskLevel = "Low";
-      let baseProb = Math.floor(Math.random() * 20) + 10; // 10-30%
+    const fetchPrediction = async () => {
+      try {
+        const cityToSearch = (location === "Current Local Coordinates" || !location) ? "Mumbai" : location;
+        const res = await fetchApi(`/risk/predict/${encodeURIComponent(cityToSearch)}`);
+        
+        if (!isMounted) return;
+        
+        clearInterval(fallbackInterval);
+        
+        // Map real data from backend
+        // res.data.mlInput = [windSpeed_kmh, waveHeight, weatherCode, dayOfWeek, boatCount]
+        const wSpeed = res.data.weather?.windSpeed ? Math.round(res.data.weather.windSpeed * 3.6) : res.data.mlInput?.[0] || 0;
+        const wHeight = res.data.mlInput?.[1] || 0;
+        
+        setTelemetry({
+          windSpeed: wSpeed,
+          waveHeight: +(wHeight).toFixed(1),
+          seaTemp: 24.5, // placeholder as openweather might not give sea temp
+          rainfall: res.data.weather?.condition === 'Rain' ? 12 : 0,
+        });
 
-      if (finalTelemetry.windSpeed > 35 || finalTelemetry.waveHeight > 3.0) {
-        riskLevel = "High";
-        baseProb = Math.floor(Math.random() * 20) + 75; // 75-95%
-      } else if (finalTelemetry.windSpeed > 20 || finalTelemetry.waveHeight > 1.8 || finalTelemetry.rainfall > 20) {
-        riskLevel = "Medium";
-        baseProb = Math.floor(Math.random() * 30) + 40; // 40-70%
+        const riskCat = res.data.risk; // "Safe" or "High Risk"
+        setResult({ 
+          category: riskCat === "Safe" ? "Low" : (riskCat === "High Risk" ? "High" : "Medium"), 
+          probability: riskCat === "Safe" ? 85 : 92
+        });
+
+      } catch (error: any) {
+        if (!isMounted) return;
+        toast.error(error.message || "Failed to fetch real-time prediction");
+        setResult(null);
+      } finally {
+        if (isMounted) {
+          clearInterval(fallbackInterval);
+          clearInterval(stepInterval);
+          setScanSteps(3);
+          setAnalyzing(false);
+        }
       }
+    };
 
-      setResult({ category: riskLevel, probability: baseProb });
-    }, 6000);
+    // Ensure animation runs at least for a bit
+    setTimeout(() => {
+      fetchPrediction();
+    }, 2500);
 
     return () => {
-      clearInterval(interval);
+      isMounted = false;
+      clearInterval(fallbackInterval);
       clearInterval(stepInterval);
-      clearTimeout(timeout);
     };
-  }, [analyzing]);
+  }, [analyzing, location]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();

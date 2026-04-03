@@ -1,18 +1,32 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { OceanGuardLogo } from "@/components/OceanGuardLogo";
-import { useToast } from "@/hooks/use-toast";
+import { fetchApi } from "@/lib/api";
+import { toast } from "sonner";
 
 export default function SignupPage() {
-  const { toast } = useToast();
+  const navigate = useNavigate();
   const [showPass, setShowPass] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "fisherman" });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast({ title: "Account created!", description: "Please check your email to verify." });
+    setIsLoading(true);
+    try {
+      await fetchApi("/auth/signup", {
+        method: "POST",
+        body: JSON.stringify(form),
+      });
+      toast.success("Account created successfully! Please log in to complete verification.");
+      navigate("/login");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to create account");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -73,7 +87,10 @@ export default function SignupPage() {
               <option value="org_admin">Organization Admin</option>
             </select>
           </div>
-          <button type="submit" className="ocean-button w-full !mt-6">Create Account</button>
+          <button type="submit" disabled={isLoading} className="ocean-button w-full !mt-6 flex justify-center items-center gap-2">
+            {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+            {isLoading ? "Creating Account..." : "Create Account"}
+          </button>
         </form>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">

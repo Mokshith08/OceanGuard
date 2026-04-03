@@ -1,39 +1,84 @@
 import { motion } from "framer-motion";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
-const monthlyRevenue = [
-  { name: "Jan", revenue: 42000 }, { name: "Feb", revenue: 58000 }, { name: "Mar", revenue: 45000 },
-  { name: "Apr", revenue: 62000 }, { name: "May", revenue: 73000 }, { name: "Jun", revenue: 68000 },
-];
+import { useState, useEffect, useMemo } from "react";
+import { fetchApi } from "@/lib/api";
+import { Loader2 } from "lucide-react";
 
-const riskTrend = [
-  { name: "Jan", high: 12, medium: 18, low: 30 },
-  { name: "Feb", high: 8, medium: 22, low: 35 },
-  { name: "Mar", high: 15, medium: 20, low: 25 },
-  { name: "Apr", high: 6, medium: 15, low: 40 },
-  { name: "May", high: 4, medium: 12, low: 45 },
-  { name: "Jun", high: 10, medium: 18, low: 32 },
-];
-
-const regionData = [
-  { name: "Bay of Bengal", value: 35 },
-  { name: "Arabian Sea", value: 25 },
-  { name: "Pacific Coast", value: 20 },
-  { name: "Indian Ocean", value: 20 },
-];
-
-const COLORS = ["hsl(199, 89%, 48%)", "hsl(168, 76%, 42%)", "hsl(222, 47%, 20%)", "hsl(0, 84%, 60%)"];
-
-const topRegions = [
-  { region: "Bay of Bengal", revenue: "₹125,000", risk: "Medium", vessels: 45 },
-  { region: "Arabian Sea", revenue: "₹98,000", risk: "Low", vessels: 32 },
-  { region: "Pacific Coast", revenue: "₹87,000", risk: "Low", vessels: 28 },
-  { region: "Indian Ocean", revenue: "₹72,000", risk: "High", vessels: 18 },
-];
-
+const COLORS = ["hsl(199, 89%, 48%)", "hsl(168, 76%, 42%)", "hsl(222, 47%, 20%)", "hsl(0, 84%, 60%)", "hsl(280, 65%, 60%)"];
 const tooltipStyle = { background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", color: "hsl(var(--foreground))" };
 
 export default function AnalyticsPage() {
+  const [data, setData] = useState<{ risk: any[], profit: any[] }>({ risk: [], profit: [] });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [riskRes, profitRes] = await Promise.all([
+          fetchApi("/risk/history?limit=100"),
+          fetchApi("/dashboard/profit-history")
+        ]);
+        setData({
+          risk: riskRes.data?.records || [],
+          profit: profitRes.data?.records || []
+        });
+      } catch (err) {
+        console.error("Analytics fetch error", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const monthlyRevenue = useMemo(() => {
+    const months: Record<string, number> = {};
+    data.profit.forEach(r => {
+      const m = new Date(r.createdAt).toLocaleString('default', { month: 'short' });
+      months[m] = (months[m] || 0) + (r.result?.revenue || 0);
+    });
+    return Object.keys(months).map(name => ({ name, revenue: months[name] }));
+  }, [data.profit]);
+
+  const riskTrend = useMemo(() => {
+    const months: Record<string, { high: number, medium: number, low: number }> = {};
+    data.risk.forEach(r => {
+      const m = new Date(r.createdAt).toLocaleString('default', { month: 'short' });
+      if (!months[m]) months[m] = { high: 0, medium: 0, low: 0 };
+      if (r.risk === "High Risk") months[m].high += 1;
+      else if (r.risk === "Safe") months[m].low += 1;
+      else months[m].medium += 1;
+    });
+    return Object.keys(months).map(name => ({ name, ...months[name] }));
+  }, [data.risk]);
+
+  const regionData = useMemo(() => {
+    const regions: Record<string, number> = {};
+    data.risk.forEach(r => {
+      const loc = r.city || "Unknown";
+      regions[loc] = (regions[loc] || 0) + 1;
+    });
+    return Object.keys(regions).map(name => ({ name, value: regions[name] })).sort((a,b) => b.value - a.value).slice(0, 5);
+  }, [data.risk]);
+
+  const topRegions = useMemo(() => {
+    const regions: Record<string, { count: number, highRisk: number }> = {};
+    data.risk.forEach(r => {
+      const loc = r.city || "Unknown";
+      if (!regions[loc]) regions[loc] = { count: 0, highRisk: 0 };
+      regions[loc].count += 1;
+      if (r.risk === "High Risk") regions[loc].highRisk += 1;
+    });
+    return Object.keys(regions).map(region => ({
+      region,
+      revenue: "N/A", // We don't track revenue by location right now
+      risk: regions[region].highRisk > 0 ? "High" : "Low",
+      vessels: regions[region].count
+    })).sort((a,b) => b.vessels - a.vessels).slice(0, 5);
+  }, [data.risk]);
+
+  if (loading) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   return (
     <div className="space-y-6">
       <div className="grid gap-6 lg:grid-cols-2">
