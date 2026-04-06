@@ -1,4 +1,7 @@
-const API_URL = "https://oceanguard-lezd.onrender.com/api";
+let API_URL = import.meta.env.VITE_API_URL || "https://oceanguard-lezd.onrender.com/api";
+if (API_URL && !API_URL.endsWith("/api") && !API_URL.endsWith("/api/")) {
+  API_URL = `${API_URL.replace(/\/$/, "")}/api`;
+}
 
 export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   const token = localStorage.getItem("oceanguard_token");
