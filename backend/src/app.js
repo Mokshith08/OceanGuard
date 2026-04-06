@@ -39,6 +39,14 @@ app.get('/health', (_req, res) => {
   res.json({ success: true, message: '🌊 OceanGuard API is live', timestamp: new Date().toISOString() });
 });
 
+// Root Route (Fix for Render 404)
+app.get('/', (_req, res) => {
+  res.json({
+    success: true,
+    message: '🌊 OceanGuard API is running 🚀',
+  });
+});
+
 // ── API Routes ────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 app.use('/api/risk', riskRoutes);
@@ -48,6 +56,7 @@ app.use('/api/contact', contactRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 
 // ── 404 Handler ───────────────────────────────────────────────────────────────
+
 app.use('*', (_req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
 });
