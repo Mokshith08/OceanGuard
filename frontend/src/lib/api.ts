@@ -1,8 +1,8 @@
+// Clean the base URL and ensure it ends with /api (without trailing slash)
 let API_URL = import.meta.env.VITE_API_URL || "https://oceanguard-lezd.onrender.com/api";
-
-// Ensure /api is included only once
-if (API_URL && !API_URL.endsWith("/api") && !API_URL.endsWith("/api/")) {
-  API_URL = `${API_URL.replace(/\/$/, "")}/api`;
+API_URL = API_URL.replace(/\/+$/, ""); // remove trailing slashes
+if (!API_URL.endsWith("/api")) {
+  API_URL = `${API_URL}/api`;
 }
 
 export async function fetchApi(endpoint: string, options: RequestInit = {}) {
@@ -20,8 +20,12 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
+  // Ensure endpoint starts with a slash
+  const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  const fullUrl = `${API_URL}${cleanEndpoint}`;
+
   try {
-    const response = await fetch(`${API_URL}${endpoint}`, {
+    const response = await fetch(fullUrl, {
       ...options,
       headers,
     });
