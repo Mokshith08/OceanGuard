@@ -1,4 +1,6 @@
 let API_URL = import.meta.env.VITE_API_URL || "https://oceanguard-lezd.onrender.com/api";
+
+// Ensure /api is included only once
 if (API_URL && !API_URL.endsWith("/api") && !API_URL.endsWith("/api/")) {
   API_URL = `${API_URL.replace(/\/$/, "")}/api`;
 }
@@ -6,15 +8,14 @@ if (API_URL && !API_URL.endsWith("/api") && !API_URL.endsWith("/api/")) {
 export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   const token = localStorage.getItem("oceanguard_token");
 
-  // Create Headers object
   const headers = new Headers(options.headers || {});
 
-  // Set default Content-Type if not providing FormData
+  // Set Content-Type if not FormData
   if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
   }
 
-  // Add authentication token
+  // Add token if exists
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
@@ -28,7 +29,9 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      throw new Error(data.message || `API request failed with status ${response.status}`);
+      throw new Error(
+        data.message || `API request failed with status ${response.status}`
+      );
     }
 
     return data;
