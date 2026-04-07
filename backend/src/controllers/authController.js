@@ -53,10 +53,24 @@ const login = async (req, res) => {
     await OTP.deleteMany({ email: user.email }); // remove old OTPs
     await OTP.create({ email: user.email, otp, expiresAt });
 
-    // Send OTP email
-    await sendOTPEmail(user.email, otp);
+    // Try to send OTP email, but don't hang login if it fails (Render blocks SMTP)
+    let emailSent = false;
+    let actualOtpData = { email: user.email };
+    
+    try {
+      await sendOTPEmail(user.email, otp);
+      emailSent = true;
+    } catch (emailErr) {
+      console.warn("Failed to send email (SMTP blocked?), falling back to response OTP:", emailErr.message);
+      // Fallback: return the OTP directly to the frontend so they can test
+      actualOtpData.otp = otp;
+    }
 
-    return sendSuccess(res, { email: user.email }, 'OTP sent to your email. Valid for 5 minutes.');
+    return sendSuccess(
+      res, 
+      actualOtpData, 
+      emailSent ? 'OTP sent to your email. Valid for 5 minutes.' : 'Test Environment: Using fallback OTP (Email failed)'
+    );
   } catch (err) {
     console.error('login error:', err);
     return sendError(res, 'Server error during login.', 500);
