@@ -13,8 +13,12 @@ const subscriptionRoutes = require('./routes/subscriptionRoutes');
 
 const app = express();
 
+// ✅ FIX: Trust Render/Railway/Heroku proxy (must be first)
+app.set('trust proxy', 1);
+
 // ── Security & Middleware ─────────────────────────────────────────────────────
 app.use(helmet());
+
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   'http://localhost:5173',
@@ -24,9 +28,7 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, Postman, curl)
     if (!origin) return callback(null, true);
-    // Allow any vercel.app subdomain (covers preview deployments)
     if (origin.endsWith('.vercel.app') || allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
@@ -35,31 +37,29 @@ app.use(cors({
   credentials: true,
 }));
 
+app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ extended: true }));
+
+if (process.env.NODE_ENV !== 'production') {
+  app.use(morgan('dev'));
+}
+
+// ✅ FIX: Rate limiter after trust proxy is set
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 100,
   message: { success: false, message: 'Too many requests. Please try again later.' },
 });
 app.use('/api/', limiter);
 
-app.use(express.json({ limit: '10kb' }));
-app.use(express.urlencoded({ extended: true }));
-
-if (process.env.NODE_ENV === 'development') {
-  app.use(morgan('dev'));
-}
-
-// ── Health Check ─────────────────────────────────────────────────────────────
+// ── Health Check ──────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => {
   res.json({ success: true, message: '🌊 OceanGuard API is live', timestamp: new Date().toISOString() });
 });
 
-// Root Route (Fix for Render 404)
+// ── Root Route ────────────────────────────────────────────────────────────────
 app.get('/', (_req, res) => {
-  res.json({
-    success: true,
-    message: '🌊 OceanGuard API is running 🚀',
-  });
+  res.json({ success: true, message: '🌊 OceanGuard API is running 🚀' });
 });
 
 // ── API Routes ────────────────────────────────────────────────────────────────
@@ -71,7 +71,6 @@ app.use('/api/contact', contactRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 
 // ── 404 Handler ───────────────────────────────────────────────────────────────
-
 app.use('*', (_req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
 });
