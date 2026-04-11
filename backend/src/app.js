@@ -16,7 +16,7 @@ const app = express();
 // ── Security & Middleware ─────────────────────────────────────────────────────
 app.use(helmet());
 const allowedOrigins = [
-  process.env.FRONTEND_URL,
+  process.env.FRONTEND_URL?.replace(/\/$/, ''), // strip trailing slash if present
   'http://localhost:5173',
   'http://localhost:3000',
   'http://localhost:8080',
@@ -69,6 +69,17 @@ app.use('/api/profit', profitRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/subscription', subscriptionRoutes);
+
+// ── Browser-friendly GET hints for POST-only auth routes ──────────────────────
+app.get('/api/auth/login', (_req, res) =>
+  res.json({ success: true, message: 'POST /api/auth/login — use POST with { email, password }' })
+);
+app.get('/api/auth/signup', (_req, res) =>
+  res.json({ success: true, message: 'POST /api/auth/signup — use POST with { name, email, password }' })
+);
+app.get('/api/auth/verify-otp', (_req, res) =>
+  res.json({ success: true, message: 'POST /api/auth/verify-otp — use POST with { email, otp }' })
+);
 
 // ── 404 Handler ───────────────────────────────────────────────────────────────
 
