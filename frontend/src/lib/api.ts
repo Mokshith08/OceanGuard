@@ -1,4 +1,4 @@
-let API_URL = import.meta.env.VITE_API_URL || "https://oceanguard-lezd.onrender.com/api";
+let API_URL = import.meta.env.VITE_API_URL || "https://oceanguard-kkrv.onrender.com/api";
 
 // Ensure /api is included only once
 if (API_URL && !API_URL.endsWith("/api") && !API_URL.endsWith("/api/")) {
