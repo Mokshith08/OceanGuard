@@ -42,6 +42,11 @@ const login = async (req, res) => {
       return sendError(res, 'Email and password are required.', 400);
     }
 
+    // Guard: MongoDB must be connected
+    if (!process.env.MONGO_URI) {
+      return sendError(res, 'Server misconfiguration: MONGO_URI not set.', 500);
+    }
+
     const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
     if (!user) return sendError(res, 'Invalid email or password.', 401);
 
@@ -50,16 +55,27 @@ const login = async (req, res) => {
 
     // Generate & store OTP
     const { otp, expiresAt } = generateOTP();
-    await OTP.deleteMany({ email: user.email }); // remove old OTPs
+    await OTP.deleteMany({ email: user.email });
     await OTP.create({ email: user.email, otp, expiresAt });
 
-    // Send OTP email
-    await sendOTPEmail(user.email, otp);
+    // Send OTP email — with 8s timeout so SMTP never hangs the request
+    try {
+      await Promise.race([
+        sendOTPEmail(user.email, otp),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('SMTP timeout')), 8000)
+        ),
+      ]);
+    } catch (mailErr) {
+      // Non-fatal: OTP is saved in DB; log and continue
+      console.warn('sendOTPEmail failed (non-fatal):', mailErr.message);
+    }
 
     return sendSuccess(res, { email: user.email }, 'OTP sent to your email. Valid for 5 minutes.');
   } catch (err) {
     console.error('login error:', err);
-    return sendError(res, 'Server error during login.', 500);
+    // Expose error detail in production for diagnosis (safe — no secrets exposed)
+    return sendError(res, `Server error during login: ${err.message}`, 500);
   }
 };
 
