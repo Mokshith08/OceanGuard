@@ -84,7 +84,7 @@ export default function SignupPage() {
               className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
             >
               <option value="fisherman">Fisherman</option>
-              <option value="org_admin">Organization Admin</option>
+              <option value="admin">Organization Admin</option>
             </select>
           </div>
           <button type="submit" disabled={isLoading} className="ocean-button w-full !mt-6 flex justify-center items-center gap-2">

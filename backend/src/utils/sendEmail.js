@@ -1,4 +1,7 @@
 const nodemailer = require('nodemailer');
+const os = require('os');
+const path = require('path');
+const fs = require('fs');
 
 const createTransport = () => {
   return nodemailer.createTransport({
@@ -16,9 +19,19 @@ const createTransport = () => {
  * Send an OTP email for login verification
  */
 const sendOTPEmail = async (toEmail, otp) => {
-  if (process.env.EMAIL_USER === 'your_email@gmail.com' || !process.env.EMAIL_USER) {
-    console.log(`[DEV EMAIL MOCK] OTP for ${toEmail} is ${otp}`);
-    require('fs').writeFileSync('otp_mock.txt', otp);
+  // Only mock email if credentials are not configured
+  const isDevMode = !process.env.EMAIL_USER ||
+    process.env.EMAIL_USER === 'your_email@gmail.com' ||
+    !process.env.EMAIL_PASS;
+
+  if (isDevMode) {
+    console.log(`[DEV EMAIL MOCK] OTP for ${toEmail} is: ${otp}`);
+    try {
+      const mockFilePath = path.join(os.tmpdir(), 'oceanguard_otp_mock.txt');
+      fs.writeFileSync(mockFilePath, `OTP for ${toEmail}: ${otp}`);
+    } catch (err) {
+      // Non-fatal: just log to console
+    }
     return;
   }
 

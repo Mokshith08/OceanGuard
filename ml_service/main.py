@@ -49,17 +49,21 @@ def health():
 
 @app.post("/predict", response_model=PredictResponse)
 def predict_risk(body: PredictRequest):
-    if len(body.features) != 4:
+    # Backend buildFeatures() sends 5 values:
+    # [windSpeed_kmh, waveHeight, weatherCode, dayOfWeek, boatCount]
+    # We accept 4 or 5 features (boatCount extra is ignored by the model)
+    if len(body.features) < 4:
         raise HTTPException(
             status_code=422,
-            detail=f"Expected 4 features, got {len(body.features)}. "
+            detail=f"Expected at least 4 features, got {len(body.features)}. "
                    "Format: [windSpeed_kmh, waveHeight, weatherCode, dayOfWeek]"
         )
 
-    if ml_model is None:
-        raise HTTPException(status_code=503, detail="ML model not loaded")
+    # Use only the first 4 features for the model
+    features = body.features[:4]
 
-    result = predict(ml_model, body.features)
+    # ml_model may be None — predict() has a rule-based fallback for that case
+    result = predict(ml_model, features)
     return result
 
 

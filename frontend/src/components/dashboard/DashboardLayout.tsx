@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Link, useLocation, Outlet } from "react-router-dom";
+import { Link, useLocation, Outlet, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, Brain, Calculator, History, BarChart3,
@@ -122,7 +122,15 @@ export default function DashboardLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
+  const navigate = useNavigate();
   const hasStatement = !!localStorage.getItem("og_fleet_results");
+
+  const handleLogout = () => {
+    localStorage.removeItem("oceanguard_token");
+    localStorage.removeItem("oceanguard_user");
+    setProfileOpen(false);
+    navigate("/");
+  };
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -198,10 +206,10 @@ export default function DashboardLayout() {
         </nav>
 
         <div className="border-t border-border/50 p-3">
-          <Link to="/" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground">
+          <button onClick={handleLogout} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground">
             <LogOut className="h-5 w-5 shrink-0" />
             {!collapsed && <span>Logout</span>}
-          </Link>
+          </button>
         </div>
       </motion.aside>
 
@@ -292,16 +300,15 @@ export default function DashboardLayout() {
                         <span className="font-medium text-foreground">Settings</span>
                       </Link>
 
-                      <Link
-                        to="/"
-                        onClick={() => setProfileOpen(false)}
+                      <button
+                        onClick={handleLogout}
                         className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors hover:bg-destructive/10 group"
                       >
                         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground group-hover:bg-destructive/10 group-hover:text-destructive">
                           <LogOut className="h-4 w-4" />
                         </div>
                         <span className="font-medium text-foreground group-hover:text-destructive">Logout</span>
-                      </Link>
+                      </button>
                     </div>
                   </motion.div>
                 )}

@@ -52,7 +52,6 @@ if (process.env.NODE_ENV === 'development') {
 // ── Health Check ─────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => {
   res.json({ success: true, message: '🌊 OceanGuard API is live', timestamp: new Date().toISOString() });
-  console.log("App loaded");
 });
 
 // Root Route (Fix for Render 404)
