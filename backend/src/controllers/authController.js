@@ -71,7 +71,7 @@ const login = async (req, res) => {
       console.warn('sendOTPEmail failed (non-fatal):', mailErr.message);
     }
 
-    return sendSuccess(res, { email: user.email, debugOtp: otp }, 'OTP sent to your email. Valid for 5 minutes.');
+    return sendSuccess(res, { email: user.email }, 'OTP sent to your email. Valid for 5 minutes.');
   } catch (err) {
     console.error('login error:', err);
     // Expose error detail in production for diagnosis (safe — no secrets exposed)

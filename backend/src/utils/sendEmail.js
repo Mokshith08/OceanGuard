@@ -1,33 +1,21 @@
-const axios = require('axios');
-
-// ── Resend HTTP API (works on Render — no SMTP port needed) ───────────────────
-const RESEND_API_URL = 'https://api.resend.com/emails';
+const nodemailer = require('nodemailer');
 
 /**
- * Send email via Resend HTTP API.
- * Works on all cloud platforms since it uses HTTPS (port 443).
+ * Create a Gmail transporter using App Password.
+ * Uses nodemailer's built-in `service: 'gmail'` which automatically
+ * picks the correct host/port (smtp.gmail.com, port 465, secure: true).
  */
-const sendViaResend = async (to, subject, html) => {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) throw new Error('RESEND_API_KEY not set in environment');
+const createTransporter = () =>
+  nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+  });
 
-  // Use your verified domain if set, otherwise use Resend's free sandbox sender
-  const from = process.env.EMAIL_FROM || 'OceanGuard <onboarding@resend.dev>';
+// ── Email HTML Templates ──────────────────────────────────────────────────────
 
-  await axios.post(
-    RESEND_API_URL,
-    { from, to: [to], subject, html },
-    {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      timeout: 10000,
-    }
-  );
-};
-
-// ── OTP Email Template ────────────────────────────────────────────────────────
 const otpHtml = (otp) => `
   <div style="font-family: Arial, sans-serif; max-width: 480px; margin: auto; padding: 32px;
               border-radius: 12px; background: #0f172a; color: #f1f5f9;">
@@ -48,7 +36,6 @@ const otpHtml = (otp) => `
   </div>
 `;
 
-// ── Contact Confirmation Template ─────────────────────────────────────────────
 const contactHtml = (name) => `
   <div style="font-family: Arial, sans-serif; max-width: 480px; margin: auto; padding: 32px;
               border-radius: 12px; background: #0f172a; color: #f1f5f9;">
@@ -63,26 +50,34 @@ const contactHtml = (name) => `
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Send OTP email.
- * Always logs OTP to console (visible in Render logs as backup).
+ * Send OTP email via Gmail App Password.
+ * OTP is always logged to console as a visible backup in server logs.
  */
 const sendOTPEmail = async (toEmail, otp) => {
   console.log(`[OTP] Generated for ${toEmail}: ${otp}`);
-  await sendViaResend(toEmail, 'Your OceanGuard Login OTP', otpHtml(otp));
-  console.log(`[Email] OTP email sent to ${toEmail}`);
+
+  const transporter = createTransporter();
+  await transporter.sendMail({
+    from: `"OceanGuard 🌊" <${process.env.EMAIL_USER}>`,
+    to: toEmail,
+    subject: 'Your OceanGuard Login OTP',
+    html: otpHtml(otp),
+  });
+
+  console.log(`[Email] OTP sent successfully to ${toEmail}`);
 };
 
 /**
- * Send contact confirmation email.
+ * Send contact confirmation email via Gmail.
  */
 const sendContactConfirmation = async (toEmail, name) => {
-  await sendViaResend(
-    toEmail,
-    "We've received your message – OceanGuard",
-    contactHtml(name)
-  );
+  const transporter = createTransporter();
+  await transporter.sendMail({
+    from: `"OceanGuard 🌊" <${process.env.EMAIL_USER}>`,
+    to: toEmail,
+    subject: "We've received your message – OceanGuard",
+    html: contactHtml(name),
+  });
 };
 
 module.exports = { sendOTPEmail, sendContactConfirmation };
-
-
