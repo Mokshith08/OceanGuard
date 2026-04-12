@@ -1,14 +1,9 @@
 const nodemailer = require('nodemailer');
-const os = require('os');
-const path = require('path');
-const fs = require('fs');
 
-const createTransport = () => {
-  const port = parseInt(process.env.EMAIL_PORT) || 465;
-  const secure = port === 465; // 465 = SSL/TLS, 587 = STARTTLS
-
-  console.log(`[Email] Creating transport — host: ${process.env.EMAIL_HOST || 'smtp.gmail.com'}, port: ${port}, secure: ${secure}, user: ${process.env.EMAIL_USER || 'NOT SET'}`);
-
+/**
+ * Try to send via a specific port/secure combo.
+ */
+const tryTransport = (port, secure) => {
   return nodemailer.createTransport({
     host: process.env.EMAIL_HOST || 'smtp.gmail.com',
     port,
@@ -17,33 +12,25 @@ const createTransport = () => {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
     },
-    tls: {
-      rejectUnauthorized: false,
-    },
+    tls: { rejectUnauthorized: false },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
   });
 };
 
 /**
- * Send an OTP email for login verification
+ * Send an OTP email for login verification.
+ * Always logs the OTP to console (visible in Render logs as a fallback).
+ * Tries port 465 (SSL) first, then falls back to 587 (STARTTLS).
  */
 const sendOTPEmail = async (toEmail, otp) => {
-  // Only mock email if credentials are not configured
-  const isDevMode = !process.env.EMAIL_USER ||
-    process.env.EMAIL_USER === 'your_email@gmail.com' ||
-    !process.env.EMAIL_PASS;
+  // Always log the OTP — visible in Render logs if email fails
+  console.log(`[OTP] Generated for ${toEmail}: ${otp}`);
 
-  if (isDevMode) {
-    console.log(`[DEV EMAIL MOCK] OTP for ${toEmail} is: ${otp}`);
-    try {
-      const mockFilePath = path.join(os.tmpdir(), 'oceanguard_otp_mock.txt');
-      fs.writeFileSync(mockFilePath, `OTP for ${toEmail}: ${otp}`);
-    } catch (err) {
-      // Non-fatal: just log to console
-    }
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.warn('[Email] EMAIL_USER or EMAIL_PASS not set — skipping SMTP send');
     return;
   }
-
-  const transporter = createTransport();
 
   const mailOptions = {
     from: `"OceanGuard 🌊" <${process.env.EMAIL_USER}>`,
@@ -63,7 +50,26 @@ const sendOTPEmail = async (toEmail, otp) => {
     `,
   };
 
-  await transporter.sendMail(mailOptions);
+  // Try port 465 (SSL) first — more reliable on cloud platforms
+  try {
+    const t = tryTransport(465, true);
+    await t.sendMail(mailOptions);
+    console.log(`[Email] OTP sent via port 465 to ${toEmail}`);
+    return;
+  } catch (err465) {
+    console.warn(`[Email] Port 465 failed: ${err465.message} — trying port 587...`);
+  }
+
+  // Fallback: port 587 (STARTTLS)
+  try {
+    const t = tryTransport(587, false);
+    await t.sendMail(mailOptions);
+    console.log(`[Email] OTP sent via port 587 to ${toEmail}`);
+    return;
+  } catch (err587) {
+    console.error(`[Email] Port 587 also failed: ${err587.message}`);
+    throw new Error(`SMTP failed on both port 465 and 587: ${err587.message}`);
+  }
 };
 
 /**

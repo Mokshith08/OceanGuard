@@ -50,8 +50,8 @@ export default function LoginPage() {
       });
       setStep(2);
       setCountdown(300);
-      if (res.data?.otp) {
-        toast.success(`DEV MODE: Your OTP is ${res.data.otp}`, { duration: 10000 });
+      if (res.data?.debugOtp) {
+        toast.success(`🔑 DEV: Your OTP is ${res.data.debugOtp}`, { duration: 60000 });
       } else {
         toast.success("OTP sent to your email!");
       }
