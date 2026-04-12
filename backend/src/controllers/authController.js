@@ -59,19 +59,25 @@ const login = async (req, res) => {
     await OTP.create({ email: user.email, otp, expiresAt });
 
     // Send OTP email — with 8s timeout so SMTP never hangs the request
+    let emailError = null;
     try {
       await Promise.race([
         sendOTPEmail(user.email, otp),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('SMTP timeout')), 8000)
+          setTimeout(() => reject(new Error('SMTP timeout after 8s')), 8000)
         ),
       ]);
     } catch (mailErr) {
-      // Non-fatal: OTP is saved in DB; log and continue
+      emailError = mailErr.message;
       console.warn('sendOTPEmail failed (non-fatal):', mailErr.message);
     }
 
-    return sendSuccess(res, { email: user.email }, 'OTP sent to your email. Valid for 5 minutes.');
+    // TEMP DEBUG: include otp + email error in response so we can see what's happening
+    return sendSuccess(res, {
+      email: user.email,
+      debugOtp: otp,
+      emailStatus: emailError ? `FAILED: ${emailError}` : 'sent',
+    }, 'OTP sent to your email. Valid for 5 minutes.');
   } catch (err) {
     console.error('login error:', err);
     // Expose error detail in production for diagnosis (safe — no secrets exposed)
