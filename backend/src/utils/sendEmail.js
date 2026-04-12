@@ -4,17 +4,22 @@ const path = require('path');
 const fs = require('fs');
 
 const createTransport = () => {
+  const port = parseInt(process.env.EMAIL_PORT) || 465;
+  const secure = port === 465; // 465 = SSL/TLS, 587 = STARTTLS
+
+  console.log(`[Email] Creating transport — host: ${process.env.EMAIL_HOST || 'smtp.gmail.com'}, port: ${port}, secure: ${secure}, user: ${process.env.EMAIL_USER || 'NOT SET'}`);
+
   return nodemailer.createTransport({
     host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.EMAIL_PORT) || 587,
-    secure: false,
+    port,
+    secure,
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
     },
     tls: {
-      rejectUnauthorized: false
-    }
+      rejectUnauthorized: false,
+    },
   });
 };
 

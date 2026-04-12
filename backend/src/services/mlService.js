@@ -46,7 +46,7 @@ const buildFeatures = (weather, boatCount = 1) => {
     parseFloat(waveHeight),
     weatherCode,
     dayOfWeek,
-    1,
+    boatCount,   // was hardcoded as 1
   ];
 };
 

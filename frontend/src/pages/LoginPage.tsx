@@ -62,6 +62,23 @@ export default function LoginPage() {
     }
   };
 
+  const handleResendOtp = async () => {
+    setIsLoading(true);
+    try {
+      await fetchApi("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email: form.email, password: form.password }),
+      });
+      setCountdown(300);
+      setOtp(["", "", "", "", "", ""]);
+      toast.success("New OTP sent to your email!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to resend OTP");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -149,7 +166,7 @@ export default function LoginPage() {
                 {countdown > 0 ? (
                   <span>Code expires in <span className="font-medium text-primary">{formatTime(countdown)}</span></span>
                 ) : (
-                  <button type="button" onClick={() => setCountdown(300)} className="font-medium text-primary hover:underline">
+                  <button type="button" onClick={handleResendOtp} className="font-medium text-primary hover:underline">
                     Resend Code
                   </button>
                 )}
