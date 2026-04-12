@@ -23,7 +23,7 @@ const sendViaGmailAPI = async (to, subject, html) => {
 
   // Build RFC 2822 email message
   const emailLines = [
-    `From: OceanGuard 🌊 <${process.env.EMAIL_USER}>`,
+    `From: =?UTF-8?B?${Buffer.from('OceanGuard 🌊').toString('base64')}?= <${process.env.EMAIL_USER}>`,
     `To: ${to}`,
     `Subject: ${subject}`,
     'MIME-Version: 1.0',
