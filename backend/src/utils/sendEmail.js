@@ -1,32 +1,56 @@
 const axios = require('axios');
 
 /**
- * Send email via Resend HTTP API (works on Render — uses HTTPS port 443).
- * Gmail SMTP is blocked on cloud servers; Resend is the reliable alternative.
+ * Get a fresh Gmail access token using the stored refresh token (OAuth2).
+ * This uses HTTPS so it works on any cloud platform including Render.
  */
-const sendViaResend = async (to, subject, html) => {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) throw new Error('RESEND_API_KEY not set in Render environment variables');
+const getGmailAccessToken = async () => {
+  const { data } = await axios.post('https://oauth2.googleapis.com/token', {
+    client_id: process.env.GMAIL_CLIENT_ID,
+    client_secret: process.env.GMAIL_CLIENT_SECRET,
+    refresh_token: process.env.GMAIL_REFRESH_TOKEN,
+    grant_type: 'refresh_token',
+  });
+  return data.access_token;
+};
 
-  const response = await axios.post(
-    'https://api.resend.com/emails',
-    {
-      from: 'OceanGuard 🌊 <onboarding@resend.dev>',
-      reply_to: process.env.EMAIL_USER || 'oceanguard.team@gmail.com',
-      to: [to],
-      subject,
-      html,
-    },
+/**
+ * Send email via Gmail REST API (HTTPS — not SMTP, works on Render).
+ * Sends FROM oceanguard.team@gmail.com using OAuth2.
+ */
+const sendViaGmailAPI = async (to, subject, html) => {
+  const accessToken = await getGmailAccessToken();
+
+  // Build RFC 2822 email message
+  const emailLines = [
+    `From: OceanGuard 🌊 <${process.env.EMAIL_USER}>`,
+    `To: ${to}`,
+    `Subject: ${subject}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/html; charset=utf-8',
+    '',
+    html,
+  ];
+  const rawMessage = emailLines.join('\n');
+
+  // Base64url encode (required by Gmail API)
+  const encodedMessage = Buffer.from(rawMessage)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+  await axios.post(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages/send`,
+    { raw: encodedMessage },
     {
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
       timeout: 10000,
     }
   );
-
-  return response.data;
 };
 
 // ── Email Templates ───────────────────────────────────────────────────────────
@@ -66,12 +90,12 @@ const contactHtml = (name) => `
 
 const sendOTPEmail = async (toEmail, otp) => {
   console.log(`[OTP] Generated for ${toEmail}: ${otp}`);
-  await sendViaResend(toEmail, 'Your OceanGuard Login OTP', otpHtml(otp));
-  console.log(`[Email] OTP email sent successfully to ${toEmail}`);
+  await sendViaGmailAPI(toEmail, 'Your OceanGuard Login OTP', otpHtml(otp));
+  console.log(`[Email] OTP sent via Gmail API to ${toEmail}`);
 };
 
 const sendContactConfirmation = async (toEmail, name) => {
-  await sendViaResend(
+  await sendViaGmailAPI(
     toEmail,
     "We've received your message – OceanGuard",
     contactHtml(name)
