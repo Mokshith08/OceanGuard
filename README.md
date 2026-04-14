@@ -343,13 +343,13 @@ Else:
 ## 📸 Screenshots
 
 ### 🖥️ Dashboard
-> *Screenshot — Analytics & risk trends overview*
+<img width="1913" height="914" alt="Screenshot 2026-04-14 162642" src="https://github.com/user-attachments/assets/41008bc9-c010-481e-84b7-cd318a0042b0" />
 
 ### 🌊 Risk Prediction
-> *Screenshot — Marine risk prediction UI*
+<img width="1919" height="912" alt="Screenshot 2026-04-14 162405" src="https://github.com/user-attachments/assets/b8f6069e-6993-490f-bb8c-7e3dbac97d58" />
 
 ### 🔐 Login Page
-> *Screenshot — OTP-based authentication flow*
+<img width="1919" height="911" alt="Screenshot 2026-04-14 162051" src="https://github.com/user-attachments/assets/c6e9efb9-232d-46ea-a0a1-f7fca5862499" />
 
 ---
 
