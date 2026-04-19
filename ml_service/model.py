@@ -1,11 +1,11 @@
 """
-OceanGuard – ML Model Loader & Predictor
+OceanGuard - ML Model Loader & Predictor
 
 Feature vector (4 values):
-  0: windSpeed_kmh   – wind speed in km/h
-  1: waveHeight      – estimated wave height in meters
-  2: weatherCode     – 0=Clear, 1=Clouds, 2=Rain, 3=Storm, 4=Snow, 5=Fog
-  3: dayOfWeek       – 0=Monday … 6=Sunday
+  0: windSpeed_kmh   - wind speed in km/h
+  1: waveHeight      - estimated wave height in meters
+  2: weatherCode     - 0=Clear, 1=Clouds, 2=Rain, 3=Storm, 4=Snow, 5=Fog
+  3: dayOfWeek       - 0=Monday ... 6=Sunday
 
 Label:
   1 = Safe
@@ -19,7 +19,6 @@ import joblib
 MODEL_PATH  = os.path.join(os.path.dirname(__file__), "model.pkl")
 SCALER_PATH = os.path.join(os.path.dirname(__file__), "scaler.pkl")
 
-# Loaded lazily so the correct path is always used
 _scaler = None
 
 
@@ -27,13 +26,15 @@ def _get_scaler():
     """Load scaler once and cache it."""
     global _scaler
     if _scaler is None:
+        if not os.path.exists(SCALER_PATH):
+            raise FileNotFoundError(f"scaler.pkl not found at {SCALER_PATH}")
         _scaler = joblib.load(SCALER_PATH)
         print(f"📐 Scaler loaded from {SCALER_PATH}")
     return _scaler
 
 
 def load_model():
-    """Load the trained model from disk. Falls back to a rule-based predictor if not found."""
+    """Load the trained model from disk. Falls back to rule-based predictor if not found."""
     if os.path.exists(MODEL_PATH):
         model = joblib.load(MODEL_PATH)
         print(f"📦 Model loaded from {MODEL_PATH}")
@@ -49,16 +50,22 @@ def predict(model, features: list) -> dict:
 
     Args:
         model:    Trained sklearn model, or None for rule-based fallback.
-        features: List of 4 floats – [windSpeed_kmh, waveHeight, weatherCode, dayOfWeek]
+        features: List of 4 floats - [windSpeed_kmh, waveHeight, weatherCode, dayOfWeek]
 
     Returns:
         {"prediction": int, "confidence": float}
     """
-    print(f"Features received: {features}")
-    print(f"Using ML model: {model is not None}")
+    # Only log in non-production to avoid exposing data in logs
+    if os.environ.get("ENV") != "production":
+        print(f"Features received: {features}")
+        print(f"Using ML model: {model is not None}")
 
     X = np.array(features, dtype=float).reshape(1, -1)
-    X = _get_scaler().transform(X)
+
+    try:
+        X = _get_scaler().transform(X)
+    except FileNotFoundError as e:
+        print(f"❌ Scaler error: {e} — using raw features")
 
     if model is not None:
         # ── Trained sklearn model path ──────────────────────────────────────
@@ -67,8 +74,10 @@ def predict(model, features: list) -> dict:
         confidence = float(proba[prediction])
     else:
         # ── Rule-based fallback ─────────────────────────────────────────────
-        wind_kmh, wave_height, weather_code = features[0], features[1], features[2]
-        risk_score = 0
+        wind_kmh     = features[0]
+        wave_height  = features[1]
+        weather_code = features[2]
+        risk_score   = 0
 
         # Wind contribution
         if wind_kmh > 45:
@@ -90,13 +99,13 @@ def predict(model, features: list) -> dict:
 
         # Final decision
         if risk_score >= 4:
-            prediction = 0   # High Risk
+            prediction = 0    # High Risk
             confidence = 0.90
         elif risk_score >= 2:
-            prediction = 1   # Moderate – treated as safe
+            prediction = 1    # Moderate - treated as safe
             confidence = 0.70
         else:
-            prediction = 1   # Safe
+            prediction = 1    # Safe
             confidence = 0.85
 
     return {"prediction": prediction, "confidence": confidence}

@@ -1,11 +1,13 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
   CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
   LineChart, Line, Legend,
 } from "recharts";
-import { Plus, Trash2, Ship, ArrowLeft, TrendingUp, TrendingDown, IndianRupee, ChevronRight, Fish, Fuel, Wrench, Users, Download, FileText } from "lucide-react";
+import { Plus, Trash2, Ship, ArrowLeft, TrendingUp, TrendingDown, IndianRupee, ChevronRight, Fish, Fuel, Wrench, Users, Download, FileText, Clock, Archive, BarChart2, Loader2 } from "lucide-react";
+import { fetchApi } from "@/lib/api";
+import { toast } from "sonner";
 
 interface BoatEntry {
   id: string;
@@ -28,6 +30,30 @@ interface BoatResult {
   profit: number;
 }
 
+interface SavedCalculation {
+  _id: string;
+  marketPrice: number;
+  boats: BoatResult[];
+  summary: {
+    totalCatch: number;
+    totalRevenue: number;
+    totalCost: number;
+    totalProfit: number;
+    profitMargin: number;
+  };
+  createdAt: string;
+  isActive: boolean;
+}
+
+interface PeriodSummary {
+  totalCalculations: number;
+  totalRevenue: number;
+  totalCost: number;
+  totalProfit: number;
+  totalCatch: number;
+  avgProfitMargin: number;
+}
+
 const createBoat = (): BoatEntry => ({
   id: crypto.randomUUID(),
   name: "",
@@ -37,24 +63,100 @@ const createBoat = (): BoatEntry => ({
   maintenanceCost: "",
 });
 
-export default function ProfitCalculatorPage() {
-  const [marketPrice, setMarketPrice] = useState("");
-  const [boats, setBoats] = useState<BoatEntry[]>([createBoat()]);
-  const [results, setResults] = useState<BoatResult[] | null>(null);
-  const [selectedBoatId, setSelectedBoatId] = useState<string | null>(null);
+// ── Helpers to persist/restore calculator state ──────────────────────────────
+const STORAGE_KEY = "og_calculator_state";
 
-  const addBoat = () => setBoats((prev) => [...prev, createBoat()]);
+function loadSavedState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as {
+      marketPrice: string;
+      boats: BoatEntry[];
+      results: BoatResult[] | null;
+    };
+  } catch {
+    return null;
+  }
+}
+
+export default function ProfitCalculatorPage() {
+  const saved = loadSavedState();
+
+  const [marketPrice, setMarketPrice] = useState(saved?.marketPrice ?? "");
+  const [boats, setBoats] = useState<BoatEntry[]>(saved?.boats ?? [createBoat()]);
+  const [results, setResults] = useState<BoatResult[] | null>(saved?.results ?? null);
+  const [selectedBoatId, setSelectedBoatId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // History & period summary
+  const [history, setHistory] = useState<SavedCalculation[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [periodSummary, setPeriodSummary] = useState<PeriodSummary | null>(null);
+  const [activePeriod, setActivePeriod] = useState<"weekly" | "monthly" | "yearly">("monthly");
+  const [activeTab, setActiveTab] = useState<"calculator" | "history" | "analytics">("calculator");
+
+  // ── Load history & period summary from DB on mount ───────────────────────
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await fetchApi("/fleet/history?limit=50");
+      setHistory(res.data?.records || []);
+    } catch {
+      // Silent fail — user may not be authenticated yet
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  const loadPeriodSummary = useCallback(async (period: string) => {
+    try {
+      const res = await fetchApi(`/fleet/summary?period=${period}`);
+      setPeriodSummary(res.data?.summary || null);
+    } catch {
+      setPeriodSummary(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
+
+  useEffect(() => {
+    loadPeriodSummary(activePeriod);
+  }, [activePeriod, loadPeriodSummary]);
+
+  // ── Persist form state to localStorage (offline fallback) ─────────────────
+  const persistLocal = (mp: string, b: BoatEntry[], r: BoatResult[] | null) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ marketPrice: mp, boats: b, results: r }));
+    if (r) localStorage.setItem("og_fleet_results", JSON.stringify({ marketPrice: mp, results: r }));
+  };
+
+  const handleMarketPriceChange = (val: string) => {
+    setMarketPrice(val);
+    persistLocal(val, boats, results);
+  };
+
+  const addBoat = () => {
+    const updated = [...boats, createBoat()];
+    setBoats(updated);
+    persistLocal(marketPrice, updated, results);
+  };
 
   const removeBoat = (id: string) => {
     if (boats.length <= 1) return;
-    setBoats((prev) => prev.filter((b) => b.id !== id));
+    const updated = boats.filter((b) => b.id !== id);
+    setBoats(updated);
+    persistLocal(marketPrice, updated, results);
   };
 
   const updateBoat = (id: string, field: keyof BoatEntry, value: string) => {
-    setBoats((prev) => prev.map((b) => (b.id === id ? { ...b, [field]: value } : b)));
+    const updated = boats.map((b) => (b.id === id ? { ...b, [field]: value } : b));
+    setBoats(updated);
+    persistLocal(marketPrice, updated, results);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const price = parseFloat(marketPrice) || 0;
     const boatResults: BoatResult[] = boats.map((b, i) => {
@@ -77,9 +179,25 @@ export default function ProfitCalculatorPage() {
         profit,
       };
     });
+
     setResults(boatResults);
-    // Save to localStorage so dashboard profile menu can offer download
-    localStorage.setItem("og_fleet_results", JSON.stringify({ marketPrice, results: boatResults }));
+    persistLocal(marketPrice, boats, boatResults);
+
+    // ── Save to MongoDB permanently ───────────────────────────────────────────
+    setIsSaving(true);
+    try {
+      await fetchApi("/fleet/save", {
+        method: "POST",
+        body: JSON.stringify({ marketPrice: price, boats: boatResults }),
+      });
+      toast.success("Calculation saved to your records!");
+      await loadHistory();
+      await loadPeriodSummary(activePeriod);
+    } catch {
+      toast.error("Saved locally — couldn't sync to server");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const selectedBoat = useMemo(
@@ -525,8 +643,189 @@ export default function ProfitCalculatorPage() {
   }
 
   // ── CALCULATOR + RESULTS VIEW ────────────────────────────────────
+  const activeRecords = history.filter((h) => h.isActive);
+  const archivedRecords = history.filter((h) => !h.isActive);
+
   return (
-    <div className="mx-auto max-w-5xl space-y-8">
+    <div className="mx-auto max-w-5xl space-y-6">
+
+      {/* ── Tab Navigation ─────────────────────────────────────────── */}
+      <div className="flex gap-1 rounded-2xl border border-border bg-muted/40 p-1">
+        {(["calculator", "history", "analytics"] as const).map((tab) => {
+          const icons = { calculator: IndianRupee, history: Archive, analytics: BarChart2 };
+          const Icon = icons[tab];
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all capitalize ${
+                activeTab === tab
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              {tab}
+              {tab === "history" && history.length > 0 && (
+                <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-xs text-primary">{history.length}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── HISTORY TAB ───────────────────────────────────────────── */}
+      {activeTab === "history" && (
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+          {historyLoading ? (
+            <div className="flex h-48 items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-primary" /></div>
+          ) : history.length === 0 ? (
+            <div className="stat-card flex h-48 flex-col items-center justify-center gap-3 text-center">
+              <Archive className="h-10 w-10 text-muted-foreground/40" />
+              <p className="text-muted-foreground">No calculations yet. Use the Calculator tab to get started.</p>
+            </div>
+          ) : (
+            <>
+              {/* Active records (last 24 hours) */}
+              {activeRecords.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-accent" />
+                    <h3 className="font-display text-sm font-semibold text-foreground">Active — Last 24 Hours</h3>
+                    <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs text-accent">{activeRecords.length}</span>
+                  </div>
+                  {activeRecords.map((rec) => (
+                    <div key={rec._id} className="stat-card border-accent/20 bg-accent/5 space-y-3">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
+                          <span className="text-sm font-semibold text-foreground">
+                            {rec.boats.length} Boat{rec.boats.length > 1 ? "s" : ""} · ₹{rec.marketPrice}/kg
+                          </span>
+                        </div>
+                        <span className="text-xs text-muted-foreground">{new Date(rec.createdAt).toLocaleString()}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        {[
+                          { label: "Total Catch", value: `${rec.summary.totalCatch.toLocaleString()} kg`, cls: "text-foreground" },
+                          { label: "Revenue", value: `₹${rec.summary.totalRevenue.toLocaleString()}`, cls: "text-primary" },
+                          { label: "Costs", value: `₹${rec.summary.totalCost.toLocaleString()}`, cls: "text-destructive" },
+                          { label: "Net Profit", value: `₹${rec.summary.totalProfit.toLocaleString()}`, cls: rec.summary.totalProfit < 0 ? "text-destructive font-bold" : "text-accent font-bold" },
+                        ].map((s) => (
+                          <div key={s.label} className="rounded-xl bg-card px-3 py-2">
+                            <p className="text-xs text-muted-foreground">{s.label}</p>
+                            <p className={`text-sm font-semibold ${s.cls}`}>{s.value}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {rec.boats.map((b) => (
+                          <span key={b.name} className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground">
+                            {b.name}: {b.profit >= 0 ? "+" : ""}₹{b.profit.toLocaleString()}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Archived records (older than 24 hours) */}
+              {archivedRecords.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Archive className="h-4 w-4 text-muted-foreground" />
+                    <h3 className="font-display text-sm font-semibold text-foreground">Historical Records</h3>
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{archivedRecords.length}</span>
+                  </div>
+                  <div className="overflow-x-auto rounded-xl border border-border">
+                    <table className="w-full text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/30 text-xs text-muted-foreground">
+                          <th className="px-4 py-3 font-medium">Date</th>
+                          <th className="px-4 py-3 font-medium">Boats</th>
+                          <th className="px-4 py-3 font-medium">Revenue</th>
+                          <th className="px-4 py-3 font-medium">Costs</th>
+                          <th className="px-4 py-3 font-medium">Net Profit</th>
+                          <th className="px-4 py-3 font-medium">Margin</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {archivedRecords.map((rec, i) => (
+                          <tr key={rec._id} className={`border-b border-border/50 transition-colors hover:bg-muted/30 ${i % 2 === 0 ? "" : "bg-muted/10"}`}>
+                            <td className="px-4 py-3 text-muted-foreground">{new Date(rec.createdAt).toLocaleDateString()}</td>
+                            <td className="px-4 py-3 text-foreground">{rec.boats.length}</td>
+                            <td className="px-4 py-3 text-primary">₹{rec.summary.totalRevenue.toLocaleString()}</td>
+                            <td className="px-4 py-3 text-destructive">₹{rec.summary.totalCost.toLocaleString()}</td>
+                            <td className={`px-4 py-3 font-semibold ${rec.summary.totalProfit < 0 ? "text-destructive" : "text-accent"}`}>
+                              {rec.summary.totalProfit >= 0 ? "+" : ""}₹{rec.summary.totalProfit.toLocaleString()}
+                            </td>
+                            <td className="px-4 py-3 text-foreground">{rec.summary.profitMargin.toFixed(1)}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </motion.div>
+      )}
+
+      {/* ── ANALYTICS TAB ─────────────────────────────────────────── */}
+      {activeTab === "analytics" && (
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+          {/* Period selector */}
+          <div className="flex gap-2">
+            {(["weekly", "monthly", "yearly"] as const).map((p) => (
+              <button
+                key={p}
+                onClick={() => setActivePeriod(p)}
+                className={`rounded-xl px-4 py-2 text-sm font-medium capitalize transition-all ${
+                  activePeriod === p
+                    ? "bg-primary text-primary-foreground shadow"
+                    : "border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+
+          {periodSummary ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[
+                { label: `${activePeriod.charAt(0).toUpperCase() + activePeriod.slice(1)} Revenue`, value: `₹${periodSummary.totalRevenue.toLocaleString()}`, cls: "text-primary", icon: TrendingUp },
+                { label: "Total Costs", value: `₹${periodSummary.totalCost.toLocaleString()}`, cls: "text-destructive", icon: TrendingDown },
+                { label: "Net Profit", value: `₹${periodSummary.totalProfit.toLocaleString()}`, cls: periodSummary.totalProfit < 0 ? "text-destructive" : "text-accent", icon: IndianRupee },
+                { label: "Total Catch", value: `${periodSummary.totalCatch.toLocaleString()} kg`, cls: "text-foreground", icon: Fish },
+                { label: "Avg Profit Margin", value: `${(periodSummary.avgProfitMargin || 0).toFixed(1)}%`, cls: "text-primary", icon: BarChart2 },
+                { label: "# Calculations", value: `${periodSummary.totalCalculations}`, cls: "text-foreground", icon: FileText },
+              ].map((s) => (
+                <div key={s.label} className="stat-card flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">{s.label}</p>
+                    <p className={`mt-1 font-display text-2xl font-bold ${s.cls}`}>{s.value}</p>
+                  </div>
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <s.icon className="h-5 w-5" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="stat-card flex h-48 flex-col items-center justify-center gap-3 text-center">
+              <BarChart2 className="h-10 w-10 text-muted-foreground/40" />
+              <p className="text-muted-foreground">No data for this period yet. Calculate some profits first!</p>
+            </div>
+          )}
+        </motion.div>
+      )}
+
+      {/* ── CALCULATOR TAB ────────────────────────────────────────── */}
+      {activeTab === "calculator" && (
+      <div className="space-y-8">
       <motion.form initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} onSubmit={handleSubmit} className="stat-card space-y-6">
         <h3 className="font-display text-lg font-semibold text-foreground">Multi-Boat Profit Calculator</h3>
 
@@ -534,7 +833,7 @@ export default function ProfitCalculatorPage() {
           <label className="mb-1.5 block text-sm font-medium text-foreground">Current Fish Market Price (₹/kg)</label>
           <input
             type="number" step="any" required value={marketPrice}
-            onChange={(e) => setMarketPrice(e.target.value)}
+            onChange={(e) => handleMarketPriceChange(e.target.value)}
             className={inputClass} placeholder="e.g. 5.50"
           />
         </div>
@@ -617,7 +916,32 @@ export default function ProfitCalculatorPage() {
           </AnimatePresence>
         </div>
 
-        <button type="submit" className="ocean-button">Calculate All Profits</button>
+        <div className="flex items-center gap-3 flex-wrap">
+          <button type="submit" disabled={isSaving} className="ocean-button inline-flex items-center gap-2">
+            {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+            {isSaving ? "Saving..." : "Calculate All Profits"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const fresh = [createBoat()];
+              setMarketPrice("");
+              setBoats(fresh);
+              setResults(null);
+              setSelectedBoatId(null);
+              localStorage.removeItem(STORAGE_KEY);
+              localStorage.removeItem("og_fleet_results");
+            }}
+            className="inline-flex items-center gap-2 rounded-xl border border-border px-5 py-3 text-sm font-semibold text-muted-foreground transition-all hover:bg-muted hover:text-foreground"
+          >
+            Clear &amp; Reset
+          </button>
+          {history.length > 0 && (
+            <button type="button" onClick={() => setActiveTab("history")} className="ml-auto inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
+              <Archive className="h-3.5 w-3.5" /> View {history.length} saved record{history.length > 1 ? "s" : ""}
+            </button>
+          )}
+        </div>
       </motion.form>
 
       {/* Overview Results */}
@@ -654,7 +978,10 @@ export default function ProfitCalculatorPage() {
               </BarChart>
             </ResponsiveContainer>
           </div>
+          </div>
         </motion.div>
+      )}
+      </div>  {/* end calculator tab wrapper */}
       )}
     </div>
   );

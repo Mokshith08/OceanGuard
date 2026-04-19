@@ -10,6 +10,7 @@ const profitRoutes = require('./routes/profitRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const contactRoutes = require('./routes/contactRoutes');
 const subscriptionRoutes = require('./routes/subscriptionRoutes');
+const fleetRoutes = require('./routes/fleetRoutes');
 
 const app = express();
 
@@ -69,6 +70,7 @@ app.use('/api/profit', profitRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/subscription', subscriptionRoutes);
+app.use('/api/fleet', fleetRoutes);
 
 // ── Browser-friendly GET hints for POST-only auth routes ──────────────────────
 app.get('/api/auth/login', (_req, res) =>

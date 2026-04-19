@@ -135,12 +135,18 @@ export default function LoginPage() {
                     {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+                <div className="mt-2 text-right">
+                  <a href="/forgot-password" className="text-xs text-primary hover:underline">
+                    Forgot password?
+                  </a>
+                </div>
               </div>
               <button type="submit" disabled={isLoading} className="ocean-button w-full !mt-6 flex justify-center items-center gap-2">
                 {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
                 {isLoading ? "Authenticating..." : "Continue"}
               </button>
             </motion.form>
+
           ) : (
             <motion.form key="otp" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} onSubmit={handleVerify} className="glass-card p-8 space-y-6">
               <div className="flex justify-center gap-3">

@@ -126,8 +126,12 @@ export default function DashboardLayout() {
   const hasStatement = !!localStorage.getItem("og_fleet_results");
 
   const handleLogout = () => {
+    // Clear auth
     localStorage.removeItem("oceanguard_token");
     localStorage.removeItem("oceanguard_user");
+    // Clear user-specific calculator data
+    localStorage.removeItem("og_calculator_state");
+    localStorage.removeItem("og_fleet_results");
     setProfileOpen(false);
     navigate("/");
   };

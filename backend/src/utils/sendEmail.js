@@ -102,4 +102,31 @@ const sendContactConfirmation = async (toEmail, name) => {
   );
 };
 
-module.exports = { sendOTPEmail, sendContactConfirmation };
+const sendPasswordResetEmail = async (toEmail, resetUrl) => {
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 480px; margin: auto; padding: 32px;
+                border-radius: 12px; background: #0f172a; color: #f1f5f9;">
+      <h1 style="color: #38bdf8; margin-bottom: 8px;">🌊 OceanGuard</h1>
+      <p style="color: #94a3b8; font-size: 14px; margin-bottom: 24px;">AI-Powered Marine Intelligence</p>
+      <h2 style="margin-bottom: 8px;">Reset Your Password</h2>
+      <p style="color: #cbd5e1;">You requested a password reset. Click the button below to set a new password.
+         This link is valid for <strong>1 hour</strong>.</p>
+      <div style="margin: 32px 0; text-align: center;">
+        <a href="${resetUrl}"
+           style="background: #38bdf8; color: #0f172a; padding: 14px 32px; border-radius: 8px;
+                  text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block;">
+          Reset Password
+        </a>
+      </div>
+      <p style="color: #64748b; font-size: 12px;">
+        If you did not request a password reset, you can safely ignore this email.
+        This link will expire in 1 hour.
+      </p>
+    </div>
+  `;
+  await sendViaGmailAPI(toEmail, 'Reset Your OceanGuard Password', html);
+  console.log(`[Email] Password reset email sent to ${toEmail}`);
+};
+
+module.exports = { sendOTPEmail, sendContactConfirmation, sendPasswordResetEmail };
+

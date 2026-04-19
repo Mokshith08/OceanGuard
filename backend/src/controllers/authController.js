@@ -1,8 +1,9 @@
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const OTP = require('../models/OTP');
 const generateOTP = require('../utils/generateOTP');
-const { sendOTPEmail } = require('../utils/sendEmail');
+const { sendOTPEmail, sendPasswordResetEmail } = require('../utils/sendEmail');
 const { sendSuccess, sendError } = require('../utils/apiResponse');
 
 // ── POST /api/auth/signup ─────────────────────────────────────────────────────
@@ -140,4 +141,68 @@ const verifyOtp = async (req, res) => {
   }
 };
 
-module.exports = { signup, login, verifyOtp };
+// ── POST /api/auth/forgot-password ────────────────────────────────────────────
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return sendError(res, 'Email is required.', 400);
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    // Always respond with success to prevent email enumeration
+    if (!user) {
+      return sendSuccess(res, {}, 'If that email exists, a reset link has been sent.');
+    }
+
+    // Generate a secure random token (valid 1 hour)
+    const token = crypto.randomBytes(32).toString('hex');
+    user.resetPasswordToken = token;
+    user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
+    await user.save({ validateBeforeSave: false });
+
+    const frontendUrl = process.env.FRONTEND_URL || 'https://oceanguardsys.vercel.app';
+    const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
+
+    try {
+      await sendPasswordResetEmail(user.email, resetUrl);
+    } catch (mailErr) {
+      console.error('Failed to send reset email:', mailErr.message);
+      user.resetPasswordToken = null;
+      user.resetPasswordExpires = null;
+      await user.save({ validateBeforeSave: false });
+      return sendError(res, 'Failed to send reset email. Please try again.', 500);
+    }
+
+    return sendSuccess(res, {}, 'Password reset link sent to your email.');
+  } catch (err) {
+    console.error('forgotPassword error:', err);
+    return sendError(res, 'Server error.', 500);
+  }
+};
+
+// ── POST /api/auth/reset-password ─────────────────────────────────────────────
+const resetPassword = async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) return sendError(res, 'Token and new password are required.', 400);
+    if (password.length < 8) return sendError(res, 'Password must be at least 8 characters.', 400);
+
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: new Date() }, // not expired
+    });
+
+    if (!user) return sendError(res, 'Reset link is invalid or has expired.', 400);
+
+    user.password = password; // pre-save hook will hash it
+    user.resetPasswordToken = null;
+    user.resetPasswordExpires = null;
+    await user.save();
+
+    return sendSuccess(res, {}, 'Password reset successful. You can now log in.');
+  } catch (err) {
+    console.error('resetPassword error:', err);
+    return sendError(res, 'Server error during password reset.', 500);
+  }
+};
+
+module.exports = { signup, login, verifyOtp, forgotPassword, resetPassword };
