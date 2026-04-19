@@ -3,9 +3,7 @@ import { motion } from "framer-motion";
 import { Lock, Eye, EyeOff, Loader2, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useSearchParams } from "react-router-dom";
-import axios from "axios";
-
-const API = import.meta.env.VITE_API_URL || "https://oceanguard-kkrv.onrender.com/api";
+import { fetchApi } from "@/lib/api";
 
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
@@ -29,10 +27,13 @@ export default function ResetPasswordPage() {
     }
     setIsLoading(true);
     try {
-      await axios.post(`${API}/auth/reset-password`, { token, password });
+      await fetchApi("/auth/reset-password", {
+        method: "POST",
+        body: JSON.stringify({ token, password }),
+      });
       setDone(true);
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Reset link is invalid or has expired.");
+      toast.error(err.message || "Reset link is invalid or has expired.");
     } finally {
       setIsLoading(false);
     }
