@@ -978,10 +978,9 @@ export default function ProfitCalculatorPage() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          </div>
         </motion.div>
       )}
-      </div>  {/* end calculator tab wrapper */}
+      </div>
       )}
     </div>
   );

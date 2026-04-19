@@ -3,9 +3,7 @@ import { motion } from "framer-motion";
 import { Mail, Loader2, ArrowLeft, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
-import axios from "axios";
-
-const API = import.meta.env.VITE_API_URL || "https://oceanguard-kkrv.onrender.com/api";
+import { fetchApi } from "@/lib/api";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -16,10 +14,13 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      await axios.post(`${API}/auth/forgot-password`, { email });
+      await fetchApi("/auth/forgot-password", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      });
       setSent(true);
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Something went wrong. Please try again.");
+      toast.error(err.message || "Something went wrong. Please try again.");
     } finally {
       setIsLoading(false);
     }
