@@ -5,13 +5,19 @@ const axios = require('axios');
  * This uses HTTPS so it works on any cloud platform including Render.
  */
 const getGmailAccessToken = async () => {
-  const { data } = await axios.post('https://oauth2.googleapis.com/token', {
-    client_id: process.env.GMAIL_CLIENT_ID,
-    client_secret: process.env.GMAIL_CLIENT_SECRET,
-    refresh_token: process.env.GMAIL_REFRESH_TOKEN,
-    grant_type: 'refresh_token',
-  });
-  return data.access_token;
+  try {
+    const { data } = await axios.post('https://oauth2.googleapis.com/token', {
+      client_id: process.env.GMAIL_CLIENT_ID,
+      client_secret: process.env.GMAIL_CLIENT_SECRET,
+      refresh_token: process.env.GMAIL_REFRESH_TOKEN,
+      grant_type: 'refresh_token',
+    });
+    return data.access_token;
+  } catch (err) {
+    const detail = err.response?.data || err.message;
+    console.error('[Gmail OAuth2] Token refresh failed:', JSON.stringify(detail));
+    throw new Error(`Gmail OAuth2 token refresh failed: ${JSON.stringify(detail)}`);
+  }
 };
 
 /**
@@ -23,7 +29,7 @@ const sendViaGmailAPI = async (to, subject, html) => {
 
   // Build RFC 2822 email message
   const emailLines = [
-    `From: =?UTF-8?B?${Buffer.from('OceanGuard 🌊').toString('base64')}?= <${process.env.EMAIL_USER}>`,
+    `From: OceanGuard <${process.env.EMAIL_USER}>`,
     `To: ${to}`,
     `Subject: ${subject}`,
     'MIME-Version: 1.0',
@@ -31,7 +37,7 @@ const sendViaGmailAPI = async (to, subject, html) => {
     '',
     html,
   ];
-  const rawMessage = emailLines.join('\n');
+  const rawMessage = emailLines.join('\r\n');
 
   // Base64url encode (required by Gmail API)
   const encodedMessage = Buffer.from(rawMessage)
