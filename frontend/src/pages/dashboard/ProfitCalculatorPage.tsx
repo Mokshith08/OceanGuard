@@ -5,9 +5,15 @@ import {
   CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
   LineChart, Line, Legend,
 } from "recharts";
-import { Plus, Trash2, Ship, ArrowLeft, TrendingUp, TrendingDown, IndianRupee, ChevronRight, Fish, Fuel, Wrench, Users, Download, FileText, Clock, Archive, BarChart2, Loader2 } from "lucide-react";
+import { Plus, Trash2, Ship, ArrowLeft, TrendingUp, TrendingDown, IndianRupee, ChevronRight, Fish, Fuel, Wrench, Users, Download, FileText, Clock, Archive, BarChart2, Loader2, Tag, CheckCircle2 } from "lucide-react";
 import { fetchApi } from "@/lib/api";
 import { toast } from "sonner";
+
+interface RateEntry {
+  id: string;
+  label: string;
+  price: string;
+}
 
 interface BoatEntry {
   id: string;
@@ -54,6 +60,12 @@ interface PeriodSummary {
   avgProfitMargin: number;
 }
 
+const createRate = (label = ""): RateEntry => ({
+  id: crypto.randomUUID(),
+  label,
+  price: "",
+});
+
 const createBoat = (): BoatEntry => ({
   id: crypto.randomUUID(),
   name: "",
@@ -72,6 +84,8 @@ function loadSavedState() {
     if (!raw) return null;
     return JSON.parse(raw) as {
       marketPrice: string;
+      rates: RateEntry[];
+      selectedRateId: string | null;
       boats: BoatEntry[];
       results: BoatResult[] | null;
     };
@@ -83,11 +97,25 @@ function loadSavedState() {
 export default function ProfitCalculatorPage() {
   const saved = loadSavedState();
 
-  const [marketPrice, setMarketPrice] = useState(saved?.marketPrice ?? "");
+  // ── Market Rate state ─────────────────────────────────────────────
+  const defaultRate = createRate("Market Rate");
+  const [rates, setRates] = useState<RateEntry[]>(
+    saved?.rates?.length ? saved.rates : [defaultRate]
+  );
+  const [selectedRateId, setSelectedRateId] = useState<string | null>(
+    saved?.selectedRateId ?? (saved?.rates?.[0]?.id ?? defaultRate.id)
+  );
+  // Legacy: if old state had marketPrice but no rates, seed it
+  const [marketPrice] = useState(saved?.marketPrice ?? "");
+
   const [boats, setBoats] = useState<BoatEntry[]>(saved?.boats ?? [createBoat()]);
   const [results, setResults] = useState<BoatResult[] | null>(saved?.results ?? null);
   const [selectedBoatId, setSelectedBoatId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Derived: the currently active rate entry
+  const activeRate = rates.find((r) => r.id === selectedRateId) ?? rates[0];
+  const activePrice = parseFloat(activeRate?.price || marketPrice) || 0;
 
   // History & period summary
   const [history, setHistory] = useState<SavedCalculation[]>([]);
@@ -127,44 +155,81 @@ export default function ProfitCalculatorPage() {
   }, [activePeriod, loadPeriodSummary]);
 
   // ── Persist form state to localStorage (offline fallback) ─────────────────
-  const persistLocal = (mp: string, b: BoatEntry[], r: BoatResult[] | null) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ marketPrice: mp, boats: b, results: r }));
-    if (r) localStorage.setItem("og_fleet_results", JSON.stringify({ marketPrice: mp, results: r }));
+  const persistLocal = (
+    rts: RateEntry[],
+    selRateId: string | null,
+    b: BoatEntry[],
+    r: BoatResult[] | null
+  ) => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ rates: rts, selectedRateId: selRateId, boats: b, results: r })
+    );
+    if (r) {
+      const mp = rts.find((rt) => rt.id === selRateId)?.price ?? "";
+      localStorage.setItem("og_fleet_results", JSON.stringify({ marketPrice: mp, results: r }));
+    }
   };
 
-  const handleMarketPriceChange = (val: string) => {
-    setMarketPrice(val);
-    persistLocal(val, boats, results);
+  // ── Rate helpers ──────────────────────────────────────────────────────────
+  const addRate = () => {
+    const newRate = createRate();
+    const updated = [...rates, newRate];
+    setRates(updated);
+    persistLocal(updated, selectedRateId, boats, results);
+  };
+
+  const removeRate = (id: string) => {
+    if (rates.length <= 1) return;
+    const updated = rates.filter((r) => r.id !== id);
+    setRates(updated);
+    const newSel = selectedRateId === id ? updated[0].id : selectedRateId;
+    setSelectedRateId(newSel);
+    persistLocal(updated, newSel, boats, results);
+  };
+
+  const updateRate = (id: string, field: keyof RateEntry, value: string) => {
+    const updated = rates.map((r) => (r.id === id ? { ...r, [field]: value } : r));
+    setRates(updated);
+    persistLocal(updated, selectedRateId, boats, results);
+  };
+
+  const selectRate = (id: string) => {
+    setSelectedRateId(id);
+    persistLocal(rates, id, boats, results);
   };
 
   const addBoat = () => {
     const updated = [...boats, createBoat()];
     setBoats(updated);
-    persistLocal(marketPrice, updated, results);
+    persistLocal(rates, selectedRateId, updated, results);
   };
 
   const removeBoat = (id: string) => {
     if (boats.length <= 1) return;
     const updated = boats.filter((b) => b.id !== id);
     setBoats(updated);
-    persistLocal(marketPrice, updated, results);
+    persistLocal(rates, selectedRateId, updated, results);
   };
 
   const updateBoat = (id: string, field: keyof BoatEntry, value: string) => {
     const updated = boats.map((b) => (b.id === id ? { ...b, [field]: value } : b));
     setBoats(updated);
-    persistLocal(marketPrice, updated, results);
+    persistLocal(rates, selectedRateId, updated, results);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const price = parseFloat(marketPrice) || 0;
+    if (activePrice <= 0) {
+      toast.error("Please enter a valid market price in the selected rate.");
+      return;
+    }
     const boatResults: BoatResult[] = boats.map((b, i) => {
       const fishCaught = parseFloat(b.fishCaught) || 0;
       const fuelCost = parseFloat(b.fuelCost) || 0;
       const laborCost = parseFloat(b.laborCost) || 0;
       const maintenanceCost = parseFloat(b.maintenanceCost) || 0;
-      const revenue = Math.round(fishCaught * price);
+      const revenue = Math.round(fishCaught * activePrice);
       const totalCost = Math.round(fuelCost + laborCost + maintenanceCost);
       const profit = revenue - totalCost;
       return {
@@ -181,14 +246,14 @@ export default function ProfitCalculatorPage() {
     });
 
     setResults(boatResults);
-    persistLocal(marketPrice, boats, boatResults);
+    persistLocal(rates, selectedRateId, boats, boatResults);
 
     // ── Save to MongoDB permanently ───────────────────────────────────────────
     setIsSaving(true);
     try {
       await fetchApi("/fleet/save", {
         method: "POST",
-        body: JSON.stringify({ marketPrice: price, boats: boatResults }),
+        body: JSON.stringify({ marketPrice: activePrice, boats: boatResults }),
       });
       toast.success("Calculation saved to your records!");
       await loadHistory();
@@ -272,7 +337,7 @@ export default function ProfitCalculatorPage() {
       <div class="brand"><span>Ocean</span>Guard</div>
       <div class="sub">Fleet Profit Statement &mdash; All Boats</div>
     </div>
-    <div class="date">Generated on<br/><strong>${date}</strong><br/><br/>Market Price: <strong>₹${marketPrice}/kg</strong></div>
+    <div class="date">Generated on<br/><strong>${date}</strong><br/><br/>Market Price: <strong>₹${activePrice}/kg</strong></div>
   </div>
 
   <div class="badge">${results.length} Boat${results.length > 1 ? 's' : ''} &nbsp;·&nbsp; Current Period</div>
@@ -326,7 +391,7 @@ export default function ProfitCalculatorPage() {
   <div class="grid3">
     <div class="kpi"><div class="kpi-label">Profit Margin</div><div class="kpi-value blue" style="color:#0ea5e9">${profitMargin}%</div></div>
     <div class="kpi"><div class="kpi-label">Avg Cost per kg</div><div class="kpi-value">${totalCatchAll > 0 ? (totalCostAll / totalCatchAll).toFixed(2) : '0'} ₹</div></div>
-    <div class="kpi"><div class="kpi-label">Revenue per kg</div><div class="kpi-value">₹${marketPrice}</div></div>
+    <div class="kpi"><div class="kpi-label">Revenue per kg</div><div class="kpi-value">₹${activePrice}</div></div>
   </div>
   <div class="footer">Generated by OceanGuard &middot; Projections are based on the current period data &middot; For records and reporting purposes only</div>
 </div>
@@ -480,7 +545,7 @@ export default function ProfitCalculatorPage() {
               <Ship className="h-6 w-6 text-primary" />
               <h2 className="font-display text-2xl font-bold text-foreground">{selectedBoat.name}</h2>
             </div>
-            <p className="text-sm text-muted-foreground mt-0.5">Individual Boat Analytics — Market Price ₹{marketPrice}/kg</p>
+            <p className="text-sm text-muted-foreground mt-0.5">Individual Boat Analytics — Market Price ₹{activePrice}/kg</p>
           </div>
         </div>
 
@@ -572,7 +637,7 @@ export default function ProfitCalculatorPage() {
             {[
               { label: "Profit Margin", value: `${profitMargin}%`, desc: "Net profit as % of revenue", color: "text-accent" },
               { label: "Cost per kg", value: `₹${costPerKg}`, desc: "Avg cost to catch 1 kg", color: "text-destructive" },
-              { label: "Revenue per kg", value: `₹${revenuePerKg}`, desc: `Based on ₹${marketPrice}/kg market price`, color: "text-primary" },
+              { label: "Revenue per kg", value: `₹${revenuePerKg}`, desc: `Based on ₹${activePrice}/kg market price`, color: "text-primary" },
             ].map((s) => (
               <div key={s.label} className="rounded-xl bg-muted/50 p-5">
                 <p className="text-sm font-medium text-foreground">{s.label}</p>
@@ -630,7 +695,7 @@ export default function ProfitCalculatorPage() {
               </div>
             </div>
             <button
-              onClick={() => downloadStatement(selectedBoat, marketPrice, profitMargin, costPerKg, revenuePerKg)}
+              onClick={() => downloadStatement(selectedBoat, String(activePrice), profitMargin, costPerKg, revenuePerKg)}
               className="ocean-button shrink-0 gap-2"
             >
               <Download className="h-4 w-4" />
@@ -829,13 +894,113 @@ export default function ProfitCalculatorPage() {
       <motion.form initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} onSubmit={handleSubmit} className="stat-card space-y-6">
         <h3 className="font-display text-lg font-semibold text-foreground">Multi-Boat Profit Calculator</h3>
 
-        <div className="max-w-xs">
-          <label className="mb-1.5 block text-sm font-medium text-foreground">Current Fish Market Price (₹/kg)</label>
-          <input
-            type="number" step="any" required value={marketPrice}
-            onChange={(e) => handleMarketPriceChange(e.target.value)}
-            className={inputClass} placeholder="e.g. 5.50"
-          />
+        {/* ── Market Rates Section ────────────────────────────────────── */}
+        <div>
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Fish Market Rates ({rates.length})</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Select one rate to use for calculation</p>
+            </div>
+            <button
+              type="button"
+              onClick={addRate}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
+            >
+              <Plus className="h-3.5 w-3.5" /> Add Rate
+            </button>
+          </div>
+
+          <AnimatePresence initial={false}>
+            {rates.map((rate, i) => {
+              const isSelected = rate.id === selectedRateId;
+              return (
+                <motion.div
+                  key={rate.id}
+                  initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                  animate={{ opacity: 1, height: "auto", marginBottom: 10 }}
+                  exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div
+                    className={`rounded-2xl border p-3 transition-all cursor-pointer ${
+                      isSelected
+                        ? "border-primary/60 bg-primary/8 ring-1 ring-primary/30"
+                        : "border-border bg-muted/30 hover:border-primary/30"
+                    }`}
+                    onClick={() => selectRate(rate.id)}
+                  >
+                    <div className="flex items-center gap-3">
+                      {/* Radio indicator */}
+                      <div
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all ${
+                          isSelected ? "border-primary bg-primary/20" : "border-muted-foreground/40"
+                        }`}
+                      >
+                        {isSelected && <CheckCircle2 className="h-3.5 w-3.5 text-primary" />}
+                      </div>
+
+                      {/* Label input */}
+                      <div className="flex-1 min-w-0">
+                        <label className="mb-1 block text-xs text-muted-foreground">Rate Label</label>
+                        <input
+                          type="text"
+                          value={rate.label}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => updateRate(rate.id, "label", e.target.value)}
+                          className={inputClass}
+                          placeholder={`Rate ${i + 1}`}
+                        />
+                      </div>
+
+                      {/* Price input */}
+                      <div className="w-40 shrink-0">
+                        <label className="mb-1 block text-xs text-muted-foreground">Price (₹/kg)</label>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={rate.price}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => updateRate(rate.id, "price", e.target.value)}
+                          className={inputClass}
+                          placeholder="e.g. 5.50"
+                        />
+                      </div>
+
+                      {/* Selected badge */}
+                      {isSelected && (
+                        <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 text-xs font-semibold text-primary">
+                          Active
+                        </span>
+                      )}
+
+                      {/* Remove button */}
+                      {rates.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); removeRate(rate.id); }}
+                          className="shrink-0 rounded-lg p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+
+          {/* Active rate summary */}
+          {activePrice > 0 && (
+            <div className="mt-1 flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5">
+              <Tag className="h-4 w-4 text-primary shrink-0" />
+              <span className="text-sm text-foreground">
+                Using: <span className="font-semibold text-primary">{activeRate?.label || `Rate`}</span>
+                {" "}at <span className="font-semibold text-primary">₹{activePrice}/kg</span> for calculations
+              </span>
+            </div>
+          )}
         </div>
 
         <div>
@@ -924,8 +1089,10 @@ export default function ProfitCalculatorPage() {
           <button
             type="button"
             onClick={() => {
+              const freshRate = createRate("Market Rate");
               const fresh = [createBoat()];
-              setMarketPrice("");
+              setRates([freshRate]);
+              setSelectedRateId(freshRate.id);
               setBoats(fresh);
               setResults(null);
               setSelectedBoatId(null);
