@@ -1,5 +1,5 @@
 const Risk = require('../models/Risk');
-const Profit = require('../models/Profit');
+const FleetCalculation = require('../models/FleetCalculation');
 const { sendSuccess, sendError } = require('../utils/apiResponse');
 
 // ── GET /api/dashboard/risk-history ──────────────────────────────────────────
@@ -18,7 +18,7 @@ const getRiskHistory = async (req, res) => {
 // ── GET /api/dashboard/profit-history ────────────────────────────────────────
 const getProfitHistory = async (req, res) => {
   try {
-    const records = await Profit.find({ userId: req.user._id })
+    const records = await FleetCalculation.find({ userId: req.user._id })
       .sort({ createdAt: -1 })
       .limit(30)
       .lean();
@@ -48,16 +48,16 @@ const getAnalytics = async (req, res) => {
         { $group: { _id: '$risk', count: { $sum: 1 } } },
       ]),
 
-      // Profit aggregates
-      Profit.aggregate([
+      // Profit aggregates (from FleetCalculation — where data is actually saved)
+      FleetCalculation.aggregate([
         { $match: { userId } },
         {
           $group: {
             _id: null,
-            totalProfit: { $sum: '$result.profit' },
-            totalRevenue: { $sum: '$result.revenue' },
-            totalCatch: { $sum: '$result.catch' },
-            avgProfitMargin: { $avg: '$result.profitMargin' },
+            totalProfit: { $sum: '$summary.totalProfit' },
+            totalRevenue: { $sum: '$summary.totalRevenue' },
+            totalCatch: { $sum: '$summary.totalCatch' },
+            avgProfitMargin: { $avg: '$summary.profitMargin' },
             count: { $sum: 1 },
           },
         },

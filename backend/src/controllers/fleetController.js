@@ -1,5 +1,5 @@
 const FleetCalculation = require('../models/FleetCalculation');
-const { success, error } = require('../utils/apiResponse');
+const { sendSuccess, sendError } = require('../utils/apiResponse');
 
 /**
  * POST /api/fleet/save
@@ -10,7 +10,7 @@ const saveCalculation = async (req, res) => {
     const { marketPrice, boats } = req.body;
 
     if (!marketPrice || !Array.isArray(boats) || boats.length === 0) {
-      return error(res, 'marketPrice and boats array are required', 400);
+      return sendError(res, 'marketPrice and boats array are required', 400);
     }
 
     // Compute summary from boats
@@ -29,10 +29,10 @@ const saveCalculation = async (req, res) => {
       summary: { totalCatch, totalRevenue, totalCost, totalProfit, profitMargin },
     });
 
-    return success(res, { calculation: calc }, 'Calculation saved', 201);
+    return sendSuccess(res, { calculation: calc }, 'Calculation saved', 201);
   } catch (err) {
     console.error('saveCalculation error:', err);
-    return error(res, 'Failed to save calculation', 500);
+    return sendError(res, 'Failed to save calculation', 500);
   }
 };
 
@@ -63,13 +63,13 @@ const getHistory = async (req, res) => {
       isActive: now - new Date(r.createdAt).getTime() < ONE_DAY_MS,
     }));
 
-    return success(res, {
+    return sendSuccess(res, {
       records: recordsWithStatus,
       pagination: { page, limit, total, pages: Math.ceil(total / limit) },
     });
   } catch (err) {
     console.error('getHistory error:', err);
-    return error(res, 'Failed to fetch history', 500);
+    return sendError(res, 'Failed to fetch history', 500);
   }
 };
 
@@ -101,7 +101,7 @@ const getPeriodSummary = async (req, res) => {
     const [aggregate] = await FleetCalculation.aggregate([
       {
         $match: {
-          userId: req.user._id,
+          userId: req.user.id,
           createdAt: { $gte: startDate },
         },
       },
@@ -122,7 +122,7 @@ const getPeriodSummary = async (req, res) => {
     const trend = await FleetCalculation.aggregate([
       {
         $match: {
-          userId: req.user._id,
+          userId: req.user.id,
           createdAt: { $gte: startDate },
         },
       },
@@ -143,7 +143,7 @@ const getPeriodSummary = async (req, res) => {
       { $sort: { _id: 1 } },
     ]);
 
-    return success(res, {
+    return sendSuccess(res, {
       period,
       summary: aggregate || {
         totalCalculations: 0,
@@ -157,7 +157,7 @@ const getPeriodSummary = async (req, res) => {
     });
   } catch (err) {
     console.error('getPeriodSummary error:', err);
-    return error(res, 'Failed to fetch period summary', 500);
+    return sendError(res, 'Failed to fetch period summary', 500);
   }
 };
 
@@ -175,10 +175,10 @@ const getActiveCalculations = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    return success(res, { records, isActive: true });
+    return sendSuccess(res, { records, isActive: true });
   } catch (err) {
     console.error('getActiveCalculations error:', err);
-    return error(res, 'Failed to fetch active calculations', 500);
+    return sendError(res, 'Failed to fetch active calculations', 500);
   }
 };
 

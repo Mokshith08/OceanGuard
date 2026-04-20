@@ -54,8 +54,8 @@ export default function OverviewPage() {
   // Aggregate by day (last 7 items roughly, or just map the records if there are few)
   const revenueData = profitHistory.slice(0, 7).reverse().map((r: any, i: number) => ({
     name: new Date(r.createdAt).toLocaleDateString('en-US', { weekday: 'short' }),
-    revenue: r.result?.revenue || 0,
-    profit: r.result?.profit || 0,
+    revenue: r.summary?.totalRevenue || 0,
+    profit: r.summary?.totalProfit || 0,
   }));
   // Provide fallback if empty
   if (revenueData.length === 0) {
